@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getProject } from '@/lib/db/projects';
 import { listGlyphsByScan } from '@/lib/db/glyphs';
+import { getScan } from '@/lib/db/scans';
 
 export async function GET(
   request: Request,
@@ -18,5 +19,11 @@ export async function GET(
   if (!scanId) {
     return NextResponse.json({ error: 'scanId query param is required' }, { status: 400 });
   }
+
+  const scan = getScan(Number(scanId));
+  if (!scan || scan.projectId !== projectId) {
+    return NextResponse.json({ error: 'scan not found' }, { status: 404 });
+  }
+
   return NextResponse.json(listGlyphsByScan(Number(scanId)));
 }

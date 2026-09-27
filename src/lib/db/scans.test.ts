@@ -79,4 +79,32 @@ describe('scans', () => {
     };
     expect(row.alignment_status).toBe('failed');
   });
+
+  it('retrieves a scan by id', async () => {
+    const { createProject } = await import('./projects');
+    const { createTemplateVersion } = await import('./templateVersions');
+    const { createScan, getScan } = await import('./scans');
+
+    const project = createProject('Test Project');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+
+    const created = createScan(project.id, templateVersion.id, '/path/to/scan.jpg');
+    const retrieved = getScan(created.id);
+
+    expect(retrieved).toBeDefined();
+    expect(retrieved?.id).toBe(created.id);
+    expect(retrieved?.projectId).toBe(project.id);
+    expect(retrieved?.templateVersionId).toBe(templateVersion.id);
+  });
+
+  it('returns undefined for nonexistent scan', async () => {
+    const { getScan } = await import('./scans');
+    const result = getScan(99999);
+    expect(result).toBeUndefined();
+  });
 });

@@ -38,6 +38,12 @@ export function createScan(projectId: number, templateVersionId: number, filePat
   return toScan(row);
 }
 
+export function getScan(id: number): Scan | undefined {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM scans WHERE id = ?').get(id) as ScanRow | undefined;
+  return row ? toScan(row) : undefined;
+}
+
 export function updateScanAlignment(scanId: number, status: 'aligned' | 'failed'): void {
   const db = getDb();
   db.prepare('UPDATE scans SET alignment_status = ? WHERE id = ?').run(status, scanId);
