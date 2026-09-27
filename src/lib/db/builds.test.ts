@@ -37,4 +37,24 @@ describe('builds', () => {
     const builds = listBuilds(project.id);
     expect(builds).toHaveLength(2);
   });
+
+  it('gets a build by id', async () => {
+    const { createBuild, getBuild } = await import('./builds');
+    const project = await setup();
+
+    const created = createBuild(project.id, '/path/out.otf', '/path/out.ttf', { unitsPerEm: 1000 });
+    const found = getBuild(created.id);
+
+    expect(found).toBeDefined();
+    expect(found?.id).toBe(created.id);
+    expect(found?.otfPath).toBe('/path/out.otf');
+    expect(found?.ttfPath).toBe('/path/out.ttf');
+  });
+
+  it('returns undefined for a non-existent build', async () => {
+    const { getBuild } = await import('./builds');
+
+    const found = getBuild(9999);
+    expect(found).toBeUndefined();
+  });
 });

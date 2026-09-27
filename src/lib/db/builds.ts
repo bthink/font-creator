@@ -50,3 +50,9 @@ export function listBuilds(projectId: number): Build[] {
     .all(projectId) as BuildRow[];
   return rows.map(toBuild);
 }
+
+export function getBuild(id: number): Build | undefined {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM builds WHERE id = ?').get(id) as BuildRow | undefined;
+  return row ? toBuild(row) : undefined;
+}
