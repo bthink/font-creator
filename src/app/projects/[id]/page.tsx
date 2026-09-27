@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getProject } from '@/lib/db/projects';
 import { listGlyphSetEntries } from '@/lib/db/glyphSets';
 import { GlyphSetEditor } from '@/components/GlyphSetEditor';
+import { TemplateGenerator } from '@/components/TemplateGenerator';
 
 export default async function ProjectDetailPage({
   params,
@@ -17,6 +18,7 @@ export default async function ProjectDetailPage({
     <main className="mx-auto max-w-2xl p-8">
       <h1 className="text-2xl font-bold">{project.name}</h1>
       <GlyphSetEditor projectId={project.id} initialEntries={entries} />
+      <TemplateGenerator projectId={project.id} />
     </main>
   );
 }
