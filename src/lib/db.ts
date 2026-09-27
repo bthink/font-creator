@@ -12,5 +12,7 @@ export function getDb(): Database.Database {
   instance = new Database(path.join(DATA_DIR, 'font-creator.db'));
   instance.pragma('journal_mode = WAL');
   instance.pragma('foreign_keys = ON');
+  const schema = fs.readFileSync(path.join(process.cwd(), 'src/lib/db/schema.sql'), 'utf-8');
+  instance.exec(schema);
   return instance;
 }
