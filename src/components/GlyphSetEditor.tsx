@@ -18,6 +18,7 @@ export function GlyphSetEditor({
 }): React.JSX.Element {
   const [entries, setEntries] = useState(initialEntries);
   const [charValue, setCharValue] = useState('');
+  const [componentChars, setComponentChars] = useState('');
   const [isLigature, setIsLigature] = useState(false);
 
   async function handleAdd(event: React.FormEvent): Promise<void> {
@@ -28,12 +29,13 @@ export function GlyphSetEditor({
       body: JSON.stringify({
         charValue,
         type: isLigature ? 'ligature' : 'single',
-        componentChars: isLigature ? charValue : undefined,
+        componentChars: isLigature ? componentChars : undefined,
       }),
     });
     const entry = (await response.json()) as GlyphSetEntry;
     setEntries([...entries, entry]);
     setCharValue('');
+    setComponentChars('');
   }
 
   async function handleRemove(id: number): Promise<void> {
@@ -44,7 +46,7 @@ export function GlyphSetEditor({
   return (
     <section>
       <h2 className="text-lg font-semibold">Character set</h2>
-      <form onSubmit={handleAdd} className="mt-2 flex items-end gap-2">
+      <form onSubmit={handleAdd} className="mt-2 flex flex-wrap items-end gap-2">
         <div>
           <label htmlFor="char-value" className="block text-sm">
             Character(s)
@@ -57,6 +59,19 @@ export function GlyphSetEditor({
             required
           />
         </div>
+        {isLigature && (
+          <div>
+            <label htmlFor="component-chars" className="block text-sm">
+              Component characters
+            </label>
+            <input
+              id="component-chars"
+              value={componentChars}
+              onChange={(event) => setComponentChars(event.target.value)}
+              className="rounded border px-2 py-1"
+            />
+          </div>
+        )}
         <label className="flex items-center gap-1 text-sm">
           <input
             type="checkbox"
