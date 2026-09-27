@@ -118,6 +118,45 @@ describe('download route', () => {
     expect(getResponse.status).toBe(404);
   });
 
+  it('rejects a build whose font path escapes DATA_DIR (path traversal)', async () => {
+    const { createProject } = await import('@/lib/db/projects');
+    const { createBuild } = await import('@/lib/db/builds');
+    const { GET } = await import('./route');
+
+    const project = createProject('Test Font');
+    // Path outside DATA_DIR must be refused before any read.
+    const evilPath = '/etc/passwd';
+    const build = createBuild(project.id, evilPath, evilPath, {});
+
+    const downloadParams = Promise.resolve({ buildId: String(build.id) });
+    const getResponse = await GET(
+      new Request('http://localhost/api/builds/1/download?format=otf') as NextRequest,
+      { params: downloadParams },
+    );
+
+    expect(getResponse.status).toBe(403);
+  });
+
+  it('does not treat a sibling dir sharing DATA_DIR prefix as contained', async () => {
+    const { createProject } = await import('@/lib/db/projects');
+    const { createBuild } = await import('@/lib/db/builds');
+    const { GET } = await import('./route');
+
+    const project = createProject('Test Font');
+    // "./data-test-download-route-evil" shares the "./data-test-download-route"
+    // string prefix but is a different directory; must be refused.
+    const evilPath = path.resolve('./data-test-download-route-evil', 'font.otf');
+    const build = createBuild(project.id, evilPath, evilPath, {});
+
+    const downloadParams = Promise.resolve({ buildId: String(build.id) });
+    const getResponse = await GET(
+      new Request('http://localhost/api/builds/1/download?format=otf') as NextRequest,
+      { params: downloadParams },
+    );
+
+    expect(getResponse.status).toBe(403);
+  });
+
   it('returns 400 when build exists but file path is null', async () => {
     const { createProject } = await import('@/lib/db/projects');
     const { createBuild } = await import('@/lib/db/builds');

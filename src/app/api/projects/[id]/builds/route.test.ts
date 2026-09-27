@@ -70,4 +70,44 @@ describe('builds route', () => {
     expect(builds).toHaveLength(1);
     expect(builds[0].id).toBe(build.id);
   });
+
+  it('converts bbox pixel width to font units when no advance-width override is set', async () => {
+    const { createProject } = await import('@/lib/db/projects');
+    const { addGlyphSetEntry } = await import('@/lib/db/glyphSets');
+    const { createTemplateVersion } = await import('@/lib/db/templateVersions');
+    const { createScan } = await import('@/lib/db/scans');
+    const { createGlyph, updateGlyphOverrides } = await import('@/lib/db/glyphs');
+    const { TEMPLATE_DPI } = await import('@/lib/pdf/generateTemplate');
+    const { POST } = await import('./route');
+
+    const project = createProject('Convert Test');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+    const scan = createScan(project.id, templateVersion.id, '/path/to/scan.jpg');
+
+    const svgDir = path.resolve('./data-test-builds-route', 'svgs');
+    fs.mkdirSync(svgDir, { recursive: true });
+    const svgPath = path.join(svgDir, 'x.svg');
+    fs.writeFileSync(svgPath, SVG);
+
+    const entry = addGlyphSetEntry(project.id, 'x', 'single');
+    const bboxWidthPx = 300;
+    const glyph = createGlyph(entry.id, scan.id, svgPath, [0, 0, bboxWidthPx, 100]);
+    // No advanceWidthOverride -> fallback must convert px to font units.
+    updateGlyphOverrides(glyph.id, { status: 'approved' });
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await POST(new Request('http://localhost/api/projects/1/builds', { method: 'POST' }), { params });
+
+    const buildDir = path.resolve('./data-test-builds-route', 'projects', String(project.id), 'builds');
+    const specFile = fs.readdirSync(buildDir).find((f) => f.startsWith('spec-'));
+    expect(specFile).toBeTruthy();
+    const spec = JSON.parse(fs.readFileSync(path.join(buildDir, specFile!), 'utf-8'));
+    const expected = Math.round(bboxWidthPx * (1000 / TEMPLATE_DPI));
+    expect(spec.glyphs[0].advance_width).toBe(expected);
+  });
 });

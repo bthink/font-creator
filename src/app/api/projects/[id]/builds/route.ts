@@ -5,8 +5,22 @@ import { getProject } from '@/lib/db/projects';
 import { listApprovedGlyphsForBuild } from '@/lib/db/glyphs';
 import { createBuild, listBuilds } from '@/lib/db/builds';
 import { runPythonTool } from '@/lib/python/runPython';
+import { TEMPLATE_DPI } from '@/lib/pdf/generateTemplate';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
+
+// 1 point = UNITS_PER_EM / 72 font units, and 1 pixel at TEMPLATE_DPI = 72/DPI
+// points, so px -> font units = UNITS_PER_EM / DPI. UNITS_PER_EM (1000) mirrors
+// python/src/font_creator_tools/build_font.py; keep them in sync.
+const UNITS_PER_EM = 1000;
+const PX_TO_FONT_UNITS = UNITS_PER_EM / TEMPLATE_DPI;
+
+function fallbackAdvanceWidth(
+  advanceWidthOverride: number | null,
+  bboxWidthPx: number,
+): number {
+  return advanceWidthOverride ?? Math.round(bboxWidthPx * PX_TO_FONT_UNITS);
+}
 
 function slugifyFilename(name: string): string {
   const slug = name
@@ -51,7 +65,7 @@ export async function POST(
     .map((row) => ({
       char: row.charValue,
       svg_path: row.svgPath,
-      advance_width: row.advanceWidthOverride ?? row.bboxRaw[2],
+      advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
     }));
   const ligatures = rows
     .filter((row) => row.type === 'ligature')
@@ -59,7 +73,7 @@ export async function POST(
       chars: row.charValue,
       component_chars: row.componentChars,
       svg_path: row.svgPath,
-      advance_width: row.advanceWidthOverride ?? row.bboxRaw[2],
+      advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
     }));
 
   // Resolved to an absolute path because the Python build tool is spawned with a

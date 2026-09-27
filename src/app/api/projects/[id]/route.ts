@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const project = getProject(Number(id));
   if (!project) {
-    return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json({ error: 'project not found' }, { status: 404 });
   }
   return NextResponse.json(project);
 }

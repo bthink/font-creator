@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getBuild } from '@/lib/db/builds';
+
+const DATA_DIR = process.env.DATA_DIR ?? './data';
+
+// Defends against path traversal: the resolved target must live inside the
+// resolved DATA_DIR. The trailing separator on the base prevents a sibling like
+// "data-evil" from matching the "data" prefix.
+function isContained(targetPath: string): boolean {
+  const base = path.resolve(DATA_DIR);
+  const resolved = path.resolve(targetPath);
+  return resolved === base || resolved.startsWith(base + path.sep);
+}
 
 export async function GET(
   request: NextRequest,
@@ -21,6 +33,10 @@ export async function GET(
       { error: 'font file not available for this build' },
       { status: 400 },
     );
+  }
+
+  if (!isContained(filePath)) {
+    return NextResponse.json({ error: 'invalid font file path' }, { status: 403 });
   }
 
   try {

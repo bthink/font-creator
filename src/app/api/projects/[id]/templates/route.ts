@@ -14,7 +14,7 @@ export async function POST(
   const projectId = Number(id);
   const project = getProject(projectId);
   if (!project) {
-    return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json({ error: 'project not found' }, { status: 404 });
   }
   const entries = listGlyphSetEntries(projectId);
   if (entries.length === 0) {
