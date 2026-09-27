@@ -46,3 +46,5 @@ data/
 
 # python
 python/.venv/
+__pycache__/
+*.pyc
