@@ -43,6 +43,7 @@ next-env.d.ts
 
 # data and database
 data/
+data-*/
 *.db
 
 # python
