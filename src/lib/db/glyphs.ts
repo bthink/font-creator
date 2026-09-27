@@ -55,12 +55,31 @@ export function listGlyphsByScan(scanId: number): Glyph[] {
   return rows.map(toGlyph);
 }
 
+export type GlyphWithChar = Glyph & { charLabel: string };
+
+type GlyphWithCharRow = GlyphRow & { char_label: string };
+
+export function listGlyphsWithCharLabel(scanId: number): GlyphWithChar[] {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT glyphs.*, glyph_set.char_value AS char_label
+       FROM glyphs
+       JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
+       WHERE glyphs.scan_id = ?`,
+    )
+    .all(scanId) as GlyphWithCharRow[];
+  return rows.map((row) => ({ ...toGlyph(row), charLabel: row.char_label }));
+}
+
 export function updateGlyphOverrides(
   glyphId: number,
   overrides: { advanceWidthOverride?: number; leftBearingOverride?: number; status?: Glyph['status'] },
-): void {
+): Glyph | undefined {
   const db = getDb();
-  const current = db.prepare('SELECT * FROM glyphs WHERE id = ?').get(glyphId) as GlyphRow;
+  const current = db.prepare('SELECT * FROM glyphs WHERE id = ?').get(glyphId) as GlyphRow | undefined;
+  if (!current) return undefined;
+
   db.prepare(
     'UPDATE glyphs SET advance_width_override = ?, left_bearing_override = ?, status = ? WHERE id = ?',
   ).run(
@@ -69,4 +88,11 @@ export function updateGlyphOverrides(
     overrides.status ?? current.status,
     glyphId,
   );
+
+  return toGlyph({
+    ...current,
+    advance_width_override: overrides.advanceWidthOverride ?? current.advance_width_override,
+    left_bearing_override: overrides.leftBearingOverride ?? current.left_bearing_override,
+    status: overrides.status ?? current.status,
+  });
 }

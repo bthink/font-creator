@@ -57,11 +57,34 @@ describe('glyphs', () => {
     const { entry, scan } = await setup();
 
     const glyph = createGlyph(entry.id, scan.id, '/path/to/a.svg', [0, 0, 10, 10]);
-    updateGlyphOverrides(glyph.id, { advanceWidthOverride: 500, status: 'approved' });
+    const updatedResult = updateGlyphOverrides(glyph.id, { advanceWidthOverride: 500, status: 'approved' });
 
     const [updated] = listGlyphsByScan(scan.id);
     expect(updated.advanceWidthOverride).toBe(500);
     expect(updated.status).toBe('approved');
     expect(updated.leftBearingOverride).toBeNull();
+    expect(updatedResult?.advanceWidthOverride).toBe(500);
+  });
+
+  it('returns undefined when updating a nonexistent glyph', async () => {
+    const { updateGlyphOverrides } = await import('./glyphs');
+    await setup();
+
+    const result = updateGlyphOverrides(999999, { status: 'approved' });
+
+    expect(result).toBeUndefined();
+  });
+
+  it('lists glyphs with their char label joined from glyph_set', async () => {
+    const { createGlyph, listGlyphsWithCharLabel } = await import('./glyphs');
+    const { entry, scan } = await setup();
+
+    createGlyph(entry.id, scan.id, '/path/to/a.svg', [0, 0, 10, 10]);
+
+    const glyphs = listGlyphsWithCharLabel(scan.id);
+
+    expect(glyphs).toHaveLength(1);
+    expect(glyphs[0].charLabel).toBe(entry.charValue);
+    expect(glyphs[0].bboxRaw).toEqual([0, 0, 10, 10]);
   });
 });
