@@ -6,6 +6,12 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+# Canonical raster resolution shared across the scan pipeline. MUST be kept in
+# sync with `TEMPLATE_DPI` in src/lib/pdf/generateTemplate.ts — there is no
+# cross-language shared-config mechanism in this stack, so this code comment is
+# the pragmatic guard.
+DPI = 300
+
 
 @dataclass
 class Marker:
@@ -51,7 +57,15 @@ def order_markers_clockwise(markers: list[Marker]) -> list[Marker]:
     return sorted(markers, key=quadrant_key)
 
 
-def align_scan(input_path: str, output_path: str) -> dict[str, object]:
+def align_scan(
+    input_path: str,
+    output_path: str,
+    page_width_pt: float,
+    page_height_pt: float,
+    marker_margin_pt: float = 10,
+    marker_size_pt: float = 12,
+    dpi: int = DPI,
+) -> dict[str, object]:
     image = cv2.imread(input_path)
     if image is None:
         return {"ok": False, "error": "cannot_read_image"}
@@ -64,12 +78,29 @@ def align_scan(input_path: str, output_path: str) -> dict[str, object]:
     src_points = np.array(
         [[marker.center_x, marker.center_y] for marker in ordered], dtype=np.float32
     )
-    height, width = image.shape[:2]
+
+    # Warp detected markers to their known canonical pixel positions on a full-page
+    # canvas at `dpi`, rather than to the input image's own corners. Each marker's
+    # center is a fixed physical distance `d` from its nearest page edges; this is
+    # a physical measurement, so it is independent of PDF's y-up vs. image y-down.
+    scale = dpi / 72
+    canvas_w = round(page_width_pt * scale)
+    canvas_h = round(page_height_pt * scale)
+    d = (marker_margin_pt + marker_size_pt / 2) * scale
+    # order_markers_clockwise returns TRUE clockwise order: TL, TR, BR, BL.
+    # (Its quadrant_key assigns 0=TL, 1=TR, 2=BR, 3=BL — note bottom-RIGHT before
+    # bottom-LEFT. The dst points below MUST follow that same order.)
     dst_points = np.array(
-        [[0, 0], [width, 0], [0, height], [width, height]], dtype=np.float32
+        [
+            [d, d],
+            [canvas_w - d, d],
+            [canvas_w - d, canvas_h - d],
+            [d, canvas_h - d],
+        ],
+        dtype=np.float32,
     )
     matrix = cv2.getPerspectiveTransform(src_points, dst_points)
-    aligned = cv2.warpPerspective(image, matrix, (width, height))
+    aligned = cv2.warpPerspective(image, matrix, (canvas_w, canvas_h))
     cv2.imwrite(output_path, aligned)
     return {"ok": True, "output_path": output_path}
 
@@ -78,9 +109,21 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--marker-size-pt", type=float, default=None)
+    parser.add_argument("--page-width-pt", type=float, required=True)
+    parser.add_argument("--page-height-pt", type=float, required=True)
+    parser.add_argument("--marker-margin-pt", type=float, default=10)
+    parser.add_argument("--marker-size-pt", type=float, default=12)
+    parser.add_argument("--dpi", type=int, default=DPI)
     args = parser.parse_args()
-    result = align_scan(args.input, args.output)
+    result = align_scan(
+        args.input,
+        args.output,
+        args.page_width_pt,
+        args.page_height_pt,
+        args.marker_margin_pt,
+        args.marker_size_pt,
+        args.dpi,
+    )
     print(json.dumps(result))
     sys.exit(0 if result["ok"] else 1)
 

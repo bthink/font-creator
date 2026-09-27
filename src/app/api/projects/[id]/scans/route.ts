@@ -7,6 +7,12 @@ import { createScan, updateScanAlignment } from '@/lib/db/scans';
 import { listGlyphSetEntries } from '@/lib/db/glyphSets';
 import { createGlyph } from '@/lib/db/glyphs';
 import { runPythonTool } from '@/lib/python/runPython';
+import {
+  computePageDimensions,
+  TEMPLATE_DPI,
+  PAGE_MARGIN_PT,
+  MARKER_MARGIN_PT,
+} from '@/lib/pdf/generateTemplate';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
 
@@ -18,7 +24,7 @@ export async function POST(
   const projectId = Number(id);
   const project = getProject(projectId);
   if (!project) {
-    return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json({ error: 'project not found' }, { status: 404 });
   }
 
   const templateVersion = getLatestTemplateVersion(projectId);
@@ -38,20 +44,32 @@ export async function POST(
   const alignedPath = path.join(projectDir, `aligned-${Date.now()}.png`);
   await fs.writeFile(rawPath, Buffer.from(await file.arrayBuffer()));
 
+  const grid = templateVersion.gridConfig;
+  const { widthPt: pageWidthPt, heightPt: pageHeightPt } = computePageDimensions(grid);
+  const scale = TEMPLATE_DPI / 72;
+
   const scan = createScan(projectId, templateVersion.id, alignedPath);
   const result = await runPythonTool('font_creator_tools.align_scan', [
     '--input',
     path.resolve(rawPath),
     '--output',
     path.resolve(alignedPath),
+    '--page-width-pt',
+    String(pageWidthPt),
+    '--page-height-pt',
+    String(pageHeightPt),
+    '--marker-margin-pt',
+    String(MARKER_MARGIN_PT),
     '--marker-size-pt',
-    String(templateVersion.gridConfig.markerSizePt),
+    String(grid.markerSizePt),
+    '--dpi',
+    String(TEMPLATE_DPI),
   ]);
   updateScanAlignment(scan.id, result.ok ? 'aligned' : 'failed');
 
   if (result.ok) {
     const glyphOutputDir = path.resolve(path.join(projectDir, `glyphs-${scan.id}`));
-    const grid = templateVersion.gridConfig;
+    const originPx = PAGE_MARGIN_PT * scale;
     const extraction = await runPythonTool('font_creator_tools.extract_glyphs', [
       '--input',
       path.resolve(alignedPath),
@@ -60,7 +78,11 @@ export async function POST(
       '--rows',
       String(grid.rows),
       '--cell-size-px',
-      String(grid.cellSizePt),
+      String(grid.cellSizePt * scale),
+      '--origin-x-px',
+      String(originPx),
+      '--origin-y-px',
+      String(originPx),
       '--output-dir',
       glyphOutputDir,
     ]);

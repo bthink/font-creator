@@ -8,7 +8,29 @@ export type GridConfig = {
   markerSizePt: number;
 };
 
-const PAGE_MARGIN_PT = 40;
+// Canonical raster resolution shared across the scan pipeline. MUST be kept in
+// sync with `DPI` in python/src/font_creator_tools/align_scan.py — there is no
+// cross-language shared-config mechanism in this stack, so this code comment is
+// the pragmatic guard.
+export const TEMPLATE_DPI = 300;
+
+// Inset (pt) of the cell grid from the page edges. Also the origin of the cell
+// grid in PDF space: (PAGE_MARGIN_PT, PAGE_MARGIN_PT).
+export const PAGE_MARGIN_PT = 40;
+
+// Inset (pt) of registration markers from the page edges, and their size (pt).
+// MUST match drawRegistrationMarkers below and the Python align/extract tools.
+export const MARKER_MARGIN_PT = 10;
+
+export function computePageDimensions(grid: GridConfig): {
+  widthPt: number;
+  heightPt: number;
+} {
+  return {
+    widthPt: PAGE_MARGIN_PT * 2 + grid.columns * grid.cellSizePt,
+    heightPt: PAGE_MARGIN_PT * 2 + grid.rows * grid.cellSizePt,
+  };
+}
 
 export async function generateTemplatePdf(
   entries: GlyphSetEntry[],
@@ -17,8 +39,7 @@ export async function generateTemplatePdf(
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const cellsPerPage = grid.columns * grid.rows;
-  const pageWidth = PAGE_MARGIN_PT * 2 + grid.columns * grid.cellSizePt;
-  const pageHeight = PAGE_MARGIN_PT * 2 + grid.rows * grid.cellSizePt;
+  const { widthPt: pageWidth, heightPt: pageHeight } = computePageDimensions(grid);
 
   for (let pageStart = 0; pageStart < entries.length; pageStart += cellsPerPage) {
     const page = doc.addPage([pageWidth, pageHeight]);
@@ -58,7 +79,7 @@ function drawRegistrationMarkers(
   pageHeight: number,
   markerSize: number,
 ): void {
-  const margin = 10;
+  const margin = MARKER_MARGIN_PT;
   const corners = [
     [margin, pageHeight - margin - markerSize],
     [pageWidth - margin - markerSize, pageHeight - margin - markerSize],

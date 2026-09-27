@@ -29,7 +29,12 @@ def test_align_scan_writes_output_file():
         input_path = os.path.join(tmp_dir, "input.png")
         output_path = os.path.join(tmp_dir, "output.png")
         cv2.imwrite(input_path, image)
-        result = align_scan(input_path, output_path)
+        result = align_scan(
+            input_path,
+            output_path,
+            page_width_pt=200,
+            page_height_pt=300,
+        )
         assert result["ok"] is True
         assert os.path.exists(output_path)
 
@@ -40,6 +45,11 @@ def test_align_scan_reports_failure_without_markers():
         input_path = os.path.join(tmp_dir, "input.png")
         output_path = os.path.join(tmp_dir, "output.png")
         cv2.imwrite(input_path, blank)
-        result = align_scan(input_path, output_path)
+        result = align_scan(
+            input_path,
+            output_path,
+            page_width_pt=200,
+            page_height_pt=300,
+        )
         assert result["ok"] is False
         assert result["error"] == "markers_not_found"

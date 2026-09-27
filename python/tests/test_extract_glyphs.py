@@ -20,7 +20,15 @@ def test_extract_glyphs_produces_one_svg_per_cell_with_content():
         input_path = os.path.join(tmp_dir, "aligned.png")
         cv2.imwrite(input_path, image)
         output_dir = os.path.join(tmp_dir, "glyphs")
-        result = extract_glyphs(input_path, columns=2, rows=2, cell_size_px=100, output_dir=output_dir)
+        result = extract_glyphs(
+            input_path,
+            columns=2,
+            rows=2,
+            cell_size_px=100,
+            output_dir=output_dir,
+            origin_x_px=0,
+            origin_y_px=0,
+        )
         assert result["ok"] is True
         # Only cell (0,0) has ink; empty cells should be skipped
         assert len(result["cells"]) == 1
