@@ -5,6 +5,7 @@ import { listBuilds } from '@/lib/db/builds';
 import { GlyphSetEditor } from '@/components/GlyphSetEditor';
 import { TemplateGenerator } from '@/components/TemplateGenerator';
 import { FontBuildPanel } from '@/components/FontBuildPanel';
+import { ScanUploader } from '@/components/ScanUploader';
 
 export default async function ProjectDetailPage({
   params,
@@ -22,6 +23,7 @@ export default async function ProjectDetailPage({
       <h1 className="text-2xl font-bold">{project.name}</h1>
       <GlyphSetEditor projectId={project.id} initialEntries={entries} />
       <TemplateGenerator projectId={project.id} />
+      <ScanUploader projectId={project.id} />
       <FontBuildPanel projectId={project.id} initialBuilds={builds} />
     </main>
   );
