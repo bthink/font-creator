@@ -1,0 +1,85 @@
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+import cv2
+import numpy as np
+
+INK_THRESHOLD = 200
+MIN_INK_PIXELS = 20
+
+
+def cell_has_ink(cell: np.ndarray) -> bool:
+    gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+    ink_pixels = int(np.sum(gray < INK_THRESHOLD))
+    return ink_pixels >= MIN_INK_PIXELS
+
+
+def bbox_of_ink(cell: np.ndarray) -> tuple[int, int, int, int]:
+    gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+    mask = gray < INK_THRESHOLD
+    ys, xs = np.where(mask)
+    x, y = int(xs.min()), int(ys.min())
+    w, h = int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)
+    return x, y, w, h
+
+
+def trace_to_svg(cell: np.ndarray, svg_path: str) -> None:
+    gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, INK_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    with tempfile.NamedTemporaryFile(suffix=".pbm", delete=False) as tmp_pbm:
+        cv2.imwrite(tmp_pbm.name, binary)
+        subprocess.run(
+            ["potrace", tmp_pbm.name, "--svg", "-o", svg_path],
+            check=True,
+        )
+    os.unlink(tmp_pbm.name)
+
+
+def extract_glyphs(
+    input_path: str,
+    columns: int,
+    rows: int,
+    cell_size_px: int,
+    output_dir: str,
+) -> dict[str, object]:
+    image = cv2.imread(input_path)
+    if image is None:
+        return {"ok": False, "error": "cannot_read_image"}
+
+    os.makedirs(output_dir, exist_ok=True)
+    cells: list[dict[str, object]] = []
+
+    for row in range(rows):
+        for col in range(columns):
+            index = row * columns + col
+            x, y = col * cell_size_px, row * cell_size_px
+            cell = image[y : y + cell_size_px, x : x + cell_size_px]
+            if not cell_has_ink(cell):
+                continue
+            bbox = bbox_of_ink(cell)
+            svg_path = os.path.join(output_dir, f"glyph-{index}.svg")
+            trace_to_svg(cell, svg_path)
+            cells.append({"index": index, "svg_path": svg_path, "bbox": list(bbox)})
+
+    return {"ok": True, "cells": cells}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--columns", type=int, required=True)
+    parser.add_argument("--rows", type=int, required=True)
+    parser.add_argument("--cell-size-px", type=int, required=True)
+    parser.add_argument("--output-dir", required=True)
+    args = parser.parse_args()
+    result = extract_glyphs(args.input, args.columns, args.rows, args.cell_size_px, args.output_dir)
+    print(json.dumps(result))
+    sys.exit(0 if result["ok"] else 1)
+
+
+if __name__ == "__main__":
+    main()

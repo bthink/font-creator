@@ -4,6 +4,8 @@ import path from 'node:path';
 import { getProject } from '@/lib/db/projects';
 import { getLatestTemplateVersion } from '@/lib/db/templateVersions';
 import { createScan, updateScanAlignment } from '@/lib/db/scans';
+import { listGlyphSetEntries } from '@/lib/db/glyphSets';
+import { createGlyph } from '@/lib/db/glyphs';
 import { runPythonTool } from '@/lib/python/runPython';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
@@ -46,6 +48,33 @@ export async function POST(
     String(templateVersion.gridConfig.markerSizePt),
   ]);
   updateScanAlignment(scan.id, result.ok ? 'aligned' : 'failed');
+
+  if (result.ok) {
+    const glyphOutputDir = path.resolve(path.join(projectDir, `glyphs-${scan.id}`));
+    const grid = templateVersion.gridConfig;
+    const extraction = await runPythonTool('font_creator_tools.extract_glyphs', [
+      '--input',
+      path.resolve(alignedPath),
+      '--columns',
+      String(grid.columns),
+      '--rows',
+      String(grid.rows),
+      '--cell-size-px',
+      String(grid.cellSizePt),
+      '--output-dir',
+      glyphOutputDir,
+    ]);
+    if (extraction.ok) {
+      const entries = listGlyphSetEntries(projectId);
+      const cells = extraction.cells as { index: number; svg_path: string; bbox: [number, number, number, number] }[];
+      for (const cell of cells) {
+        const entry = entries[cell.index];
+        if (entry) {
+          createGlyph(entry.id, scan.id, cell.svg_path, cell.bbox);
+        }
+      }
+    }
+  }
 
   return NextResponse.json({ ...scan, alignmentStatus: result.ok ? 'aligned' : 'failed' });
 }
