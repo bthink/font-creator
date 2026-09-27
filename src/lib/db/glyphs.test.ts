@@ -87,4 +87,23 @@ describe('glyphs', () => {
     expect(glyphs[0].charLabel).toBe(entry.charValue);
     expect(glyphs[0].bboxRaw).toEqual([0, 0, 10, 10]);
   });
+
+  it('lists only approved glyphs joined with glyph_set for build', async () => {
+    const { createGlyph, updateGlyphOverrides, listApprovedGlyphsForBuild } = await import('./glyphs');
+    const { entry, scan } = await setup();
+
+    const approved = createGlyph(entry.id, scan.id, '/path/to/a.svg', [0, 0, 10, 20]);
+    updateGlyphOverrides(approved.id, { status: 'approved', advanceWidthOverride: 500 });
+
+    createGlyph(entry.id, scan.id, '/path/to/b.svg', [0, 0, 10, 20]);
+
+    const rows = listApprovedGlyphsForBuild(entry.projectId);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].charValue).toBe(entry.charValue);
+    expect(rows[0].type).toBe('single');
+    expect(rows[0].svgPath).toBe('/path/to/a.svg');
+    expect(rows[0].advanceWidthOverride).toBe(500);
+    expect(rows[0].bboxRaw).toEqual([0, 0, 10, 20]);
+  });
 });

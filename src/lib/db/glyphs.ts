@@ -72,6 +72,46 @@ export function listGlyphsWithCharLabel(scanId: number): GlyphWithChar[] {
   return rows.map((row) => ({ ...toGlyph(row), charLabel: row.char_label }));
 }
 
+export type ApprovedGlyphForBuild = {
+  charValue: string;
+  type: 'single' | 'ligature';
+  componentChars: string | null;
+  svgPath: string;
+  bboxRaw: [number, number, number, number];
+  advanceWidthOverride: number | null;
+};
+
+type ApprovedGlyphForBuildRow = {
+  char_value: string;
+  type: 'single' | 'ligature';
+  component_chars: string | null;
+  svg_path: string;
+  bbox_raw: string;
+  advance_width_override: number | null;
+};
+
+export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForBuild[] {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT glyph_set.char_value, glyph_set.type, glyph_set.component_chars,
+              glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override
+       FROM glyphs
+       JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
+       WHERE glyphs.status = 'approved' AND glyph_set.project_id = ?`,
+    )
+    .all(projectId) as ApprovedGlyphForBuildRow[];
+
+  return rows.map((row) => ({
+    charValue: row.char_value,
+    type: row.type,
+    componentChars: row.component_chars,
+    svgPath: row.svg_path,
+    bboxRaw: JSON.parse(row.bbox_raw) as [number, number, number, number],
+    advanceWidthOverride: row.advance_width_override,
+  }));
+}
+
 export function updateGlyphOverrides(
   glyphId: number,
   overrides: { advanceWidthOverride?: number; leftBearingOverride?: number; status?: Glyph['status'] },
