@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { GLYPH_PRESETS } from '@/lib/glyphPresets';
 
 type GlyphSetEntry = {
   id: number;
@@ -20,6 +21,34 @@ export function GlyphSetEditor({
   const [charValue, setCharValue] = useState('');
   const [componentChars, setComponentChars] = useState('');
   const [isLigature, setIsLigature] = useState(false);
+  const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]);
+
+  function togglePreset(presetId: string): void {
+    setSelectedPresetIds((current) =>
+      current.includes(presetId)
+        ? current.filter((id) => id !== presetId)
+        : [...current, presetId],
+    );
+  }
+
+  async function handleApplyPresets(): Promise<void> {
+    const charValues = [
+      ...new Set(
+        GLYPH_PRESETS.filter((preset) => selectedPresetIds.includes(preset.id)).flatMap(
+          (preset) => preset.chars,
+        ),
+      ),
+    ];
+    if (charValues.length === 0) return;
+    const response = await fetch(`/api/projects/${projectId}/glyph-set/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ charValues }),
+    });
+    const { added } = (await response.json()) as { added: GlyphSetEntry[] };
+    setEntries([...entries, ...added]);
+    setSelectedPresetIds([]);
+  }
 
   async function handleAdd(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -46,6 +75,29 @@ export function GlyphSetEditor({
   return (
     <section>
       <h2 className="text-lg font-semibold">Character set</h2>
+      <fieldset className="mt-2 rounded border p-2">
+        <legend className="text-sm font-medium">Presets</legend>
+        <div className="flex flex-wrap gap-3">
+          {GLYPH_PRESETS.map((preset) => (
+            <label key={preset.id} className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={selectedPresetIds.includes(preset.id)}
+                onChange={() => togglePreset(preset.id)}
+              />
+              {preset.label}
+            </label>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={handleApplyPresets}
+          disabled={selectedPresetIds.length === 0}
+          className="mt-2 rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+        >
+          Apply selected
+        </button>
+      </fieldset>
       <form onSubmit={handleAdd} className="mt-2 flex flex-wrap items-end gap-2">
         <div>
           <label htmlFor="char-value" className="block text-sm">
