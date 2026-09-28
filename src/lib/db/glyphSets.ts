@@ -50,6 +50,40 @@ export function addGlyphSetEntry(
   return toEntry(row);
 }
 
+export function addGlyphSetEntriesBulk(projectId: number, charValues: string[]): GlyphSetEntry[] {
+  const db = getDb();
+  const insertMany = db.transaction((values: string[]): GlyphSetEntry[] => {
+    const existing = new Set(
+      (
+        db
+          .prepare('SELECT char_value FROM glyph_set WHERE project_id = ?')
+          .all(projectId) as { char_value: string }[]
+      ).map((row) => row.char_value),
+    );
+    const maxOrder = db
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM glyph_set WHERE project_id = ?')
+      .get(projectId) as { max_order: number };
+    let nextOrder = maxOrder.max_order + 1;
+    const inserted: GlyphSetEntry[] = [];
+    for (const value of values) {
+      if (existing.has(value)) continue;
+      existing.add(value);
+      const result = db
+        .prepare(
+          'INSERT INTO glyph_set (project_id, char_value, type, component_chars, sort_order) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(projectId, value, 'single', null, nextOrder);
+      nextOrder += 1;
+      const row = db
+        .prepare('SELECT * FROM glyph_set WHERE id = ?')
+        .get(Number(result.lastInsertRowid)) as GlyphSetRow;
+      inserted.push(toEntry(row));
+    }
+    return inserted;
+  });
+  return insertMany(charValues);
+}
+
 export function listGlyphSetEntries(projectId: number): GlyphSetEntry[] {
   const db = getDb();
   const rows = db
