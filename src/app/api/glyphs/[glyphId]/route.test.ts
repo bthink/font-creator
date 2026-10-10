@@ -72,4 +72,39 @@ describe('glyph PATCH route', () => {
 
     expect(response.status).toBe(400);
   });
+
+  it('saves a valid scale override', async () => {
+    const glyph = await setup();
+    const { PATCH } = await import('./route');
+
+    const response = await PATCH(patchRequest({ scaleOverride: 150, status: 'approved' }), {
+      params: Promise.resolve({ glyphId: String(glyph.id) }),
+    });
+
+    expect(response.status).toBe(200);
+    const { getGlyph } = await import('@/lib/db/glyphs');
+    expect(getGlyph(glyph.id)?.scaleOverride).toBe(150);
+  });
+
+  it('rejects a scale outside 50..200', async () => {
+    const glyph = await setup();
+    const { PATCH } = await import('./route');
+
+    const response = await PATCH(patchRequest({ scaleOverride: 201 }), {
+      params: Promise.resolve({ glyphId: String(glyph.id) }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a non-integer scale', async () => {
+    const glyph = await setup();
+    const { PATCH } = await import('./route');
+
+    const response = await PATCH(patchRequest({ scaleOverride: 99.5 }), {
+      params: Promise.resolve({ glyphId: String(glyph.id) }),
+    });
+
+    expect(response.status).toBe(400);
+  });
 });

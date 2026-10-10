@@ -35,6 +35,16 @@ export async function PATCH(
       { status: 400 },
     );
   if (
+    body.scaleOverride !== undefined &&
+    (!Number.isInteger(body.scaleOverride) ||
+      body.scaleOverride < 50 ||
+      body.scaleOverride > 200)
+  )
+    return NextResponse.json(
+      { error: 'Rozmiar musi być liczbą całkowitą od 50 do 200.' },
+      { status: 400 },
+    );
+  if (
     body.status !== undefined &&
     !['pending', 'reviewed', 'approved', 'failed'].includes(body.status)
   )
