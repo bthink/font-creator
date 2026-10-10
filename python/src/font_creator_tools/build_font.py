@@ -33,7 +33,8 @@ def glyph_name_for_char(char: str) -> str:
 def svg_to_font_transform(spec: dict[str, Any]) -> Transform:
     scale = spec.get("scale", 1)
     origin_x = spec.get("origin_x", 0)
-    return Transform(scale, 0, 0, -scale, -origin_x * scale, ASCENDER)
+    vertical_offset = spec.get("vertical_offset", 0)
+    return Transform(scale, 0, 0, -scale, -origin_x * scale, ASCENDER + vertical_offset)
 
 
 def build_charstrings(glyph_specs: list[dict[str, Any]]) -> dict[str, Any]:

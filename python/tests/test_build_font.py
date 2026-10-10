@@ -121,3 +121,32 @@ def test_unicode_family_and_characters_with_curved_outlines():
             assert font["name"].getDebugName(6).isascii()
         glyph = TTFont(ttf_path)["glyf"]["uni0105"]
         assert not any(flag & 128 for flag in glyph.flags)  # standard quadratic TrueType outlines
+
+
+def test_vertical_offset_shifts_glyph_outline_in_font_units():
+    import cv2
+    import numpy as np
+    from font_creator_tools.extract_glyphs import trace_to_svg
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cell = np.full((100, 100, 3), 255, dtype=np.uint8)
+        cv2.rectangle(cell, (20, 20), (40, 50), (0, 0, 0), -1)
+        svg_path = os.path.join(tmp_dir, "scan.svg")
+        trace_to_svg(cell, svg_path)
+
+        base_spec = {"glyphs": [{"char": "a", "svg_path": svg_path, "advance_width": 100, "scale": 1000 / 300, "origin_x": 20}]}
+        shifted_spec = {"glyphs": [{"char": "a", "svg_path": svg_path, "advance_width": 100, "scale": 1000 / 300, "origin_x": 20, "vertical_offset": 40}]}
+
+        base_otf, base_ttf = os.path.join(tmp_dir, "base.otf"), os.path.join(tmp_dir, "base.ttf")
+        shifted_otf, shifted_ttf = os.path.join(tmp_dir, "shifted.otf"), os.path.join(tmp_dir, "shifted.ttf")
+
+        build_font(base_spec, base_otf, base_ttf, "Base test")
+        build_font(shifted_spec, shifted_otf, shifted_ttf, "Shifted test")
+
+        base_glyph = TTFont(base_ttf)["glyf"]["a"]
+        shifted_glyph = TTFont(shifted_ttf)["glyf"]["a"]
+
+        assert shifted_glyph.yMin - base_glyph.yMin == 40
+        assert shifted_glyph.yMax - base_glyph.yMax == 40
+        assert shifted_glyph.xMin == base_glyph.xMin
+        assert shifted_glyph.xMax == base_glyph.xMax
