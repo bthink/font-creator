@@ -38,7 +38,7 @@ export function createTemplateVersion(projectId: number, grid: GridConfig): Temp
 export function getLatestTemplateVersion(projectId: number): TemplateVersion | undefined {
   const db = getDb();
   const row = db
-    .prepare('SELECT * FROM template_versions WHERE project_id = ? ORDER BY created_at DESC LIMIT 1')
+    .prepare('SELECT * FROM template_versions WHERE project_id = ? ORDER BY id DESC LIMIT 1')
     .get(projectId) as TemplateVersionRow | undefined;
   return row ? toTemplateVersion(row) : undefined;
 }

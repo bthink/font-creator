@@ -4,6 +4,11 @@ import os
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
+
+from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.svgLib.path import parse_path
 
 import cv2
 import numpy as np
@@ -29,7 +34,8 @@ def bbox_of_ink(cell: np.ndarray) -> tuple[int, int, int, int]:
 
 def trace_to_svg(cell: np.ndarray, svg_path: str) -> None:
     gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, INK_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    # Potrace traces black pixels. Keep the ink black and the paper white.
+    _, binary = cv2.threshold(gray, INK_THRESHOLD, 255, cv2.THRESH_BINARY)
     with tempfile.NamedTemporaryFile(suffix=".pbm", delete=False) as tmp_pbm:
         cv2.imwrite(tmp_pbm.name, binary)
         subprocess.run(
@@ -37,6 +43,17 @@ def trace_to_svg(cell: np.ndarray, svg_path: str) -> None:
             check=True,
         )
     os.unlink(tmp_pbm.name)
+    # FontTools does not inherit SVG group transforms. Flatten potrace's fixed
+    # decipixel/y-up coordinate system into pixel/y-down paths for both consumers.
+    traced = ET.parse(svg_path).getroot()
+    height, width = cell.shape[:2]
+    root = ET.Element("svg", {"xmlns": "http://www.w3.org/2000/svg", "viewBox": f"0 0 {width} {height}", "width": str(width), "height": str(height)})
+    for element in traced.iter():
+        if element.tag.endswith("}path"):
+            pen = SVGPathPen(None)
+            parse_path(element.attrib["d"], TransformPen(pen, (0.1, 0, 0, -0.1, 0, height)))
+            ET.SubElement(root, "path", {"d": pen.getCommands()})
+    ET.ElementTree(root).write(svg_path, encoding="unicode")
 
 
 def extract_glyphs(

@@ -63,3 +63,40 @@ def test_build_font_with_non_alnum_ligature_component():
         assert result["ok"] is True
         font = TTFont(otf_path)
         assert "GSUB" in font
+
+
+def test_traced_scan_uses_font_units_and_correct_orientation():
+    import cv2
+    import numpy as np
+    from font_creator_tools.extract_glyphs import trace_to_svg
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cell = np.full((100, 100, 3), 255, dtype=np.uint8)
+        cv2.rectangle(cell, (20, 20), (40, 50), (0, 0, 0), -1)
+        svg_path = os.path.join(tmp_dir, "scan.svg")
+        trace_to_svg(cell, svg_path)
+        spec = {"glyphs": [{"char": "a", "svg_path": svg_path, "advance_width": 100, "scale": 1000 / 300, "origin_x": 20}]}
+        otf_path, ttf_path = os.path.join(tmp_dir, "out.otf"), os.path.join(tmp_dir, "out.ttf")
+        build_font(spec, otf_path, ttf_path, "Scan test")
+        glyph = TTFont(ttf_path)["glyf"]["a"]
+        assert abs(glyph.xMin) <= 1
+        assert 68 <= glyph.xMax <= 72
+        assert 628 <= glyph.yMin <= 632
+        assert 731 <= glyph.yMax <= 735
+
+
+def test_unicode_family_and_characters_with_curved_outlines():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        svg_path = os.path.join(tmp_dir, "a.svg")
+        with open(svg_path, "w") as handle:
+            handle.write('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 C0 100 100 100 100 0 Z"/></svg>')
+        spec = {"glyphs": [{"char": "ą", "svg_path": svg_path, "advance_width": 600}]}
+        otf_path, ttf_path = os.path.join(tmp_dir, "out.otf"), os.path.join(tmp_dir, "out.ttf")
+        build_font(spec, otf_path, ttf_path, "Listy z podróży")
+        for file in [otf_path, ttf_path]:
+            font = TTFont(file)
+            assert ord("ą") in font.getBestCmap()
+            assert font["name"].getDebugName(1) == "Listy z podróży"
+            assert font["name"].getDebugName(6).isascii()
+        glyph = TTFont(ttf_path)["glyf"]["uni0105"]
+        assert not any(flag & 128 for flag in glyph.flags)  # standard quadratic TrueType outlines

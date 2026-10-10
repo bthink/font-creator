@@ -98,7 +98,8 @@ export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForB
               glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override
        FROM glyphs
        JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
-       WHERE glyphs.status = 'approved' AND glyph_set.project_id = ?`,
+       WHERE glyphs.status = 'approved' AND glyph_set.project_id = ?
+         AND glyphs.id = (SELECT MAX(latest.id) FROM glyphs latest WHERE latest.glyph_set_id = glyphs.glyph_set_id AND latest.status = 'approved')`,
     )
     .all(projectId) as ApprovedGlyphForBuildRow[];
 
@@ -135,4 +136,9 @@ export function updateGlyphOverrides(
     left_bearing_override: overrides.leftBearingOverride ?? current.left_bearing_override,
     status: overrides.status ?? current.status,
   });
+}
+
+export function getGlyph(id: number): Glyph | undefined {
+  const row = getDb().prepare('SELECT * FROM glyphs WHERE id = ?').get(id) as GlyphRow | undefined;
+  return row ? toGlyph(row) : undefined;
 }

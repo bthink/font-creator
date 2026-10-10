@@ -1,3 +1,4 @@
+import { SCAN_DPI } from '@/lib/glyphMetrics';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fs from 'node:fs';
@@ -11,13 +12,14 @@ export type GridConfig = {
   rows: number;
   cellSizePt: number;
   markerSizePt: number;
+  glyphSetIds?: number[];
 };
 
 // Canonical raster resolution shared across the scan pipeline. MUST be kept in
 // sync with `DPI` in python/src/font_creator_tools/align_scan.py — there is no
 // cross-language shared-config mechanism in this stack, so this code comment is
 // the pragmatic guard.
-export const TEMPLATE_DPI = 300;
+export const TEMPLATE_DPI = SCAN_DPI;
 
 // Inset (pt) of the cell grid from the page edges. Also the origin of the cell
 // grid in PDF space: (PAGE_MARGIN_PT, PAGE_MARGIN_PT).

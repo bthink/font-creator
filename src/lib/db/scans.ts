@@ -48,3 +48,8 @@ export function updateScanAlignment(scanId: number, status: 'aligned' | 'failed'
   const db = getDb();
   db.prepare('UPDATE scans SET alignment_status = ? WHERE id = ?').run(status, scanId);
 }
+
+export function listScans(projectId: number): Scan[] {
+  const rows = getDb().prepare('SELECT * FROM scans WHERE project_id = ? ORDER BY id DESC').all(projectId) as ScanRow[];
+  return rows.map(toScan);
+}

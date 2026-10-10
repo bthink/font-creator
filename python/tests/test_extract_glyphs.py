@@ -58,3 +58,23 @@ def test_extract_glyphs_ignores_ink_in_label_strip():
         )
         assert result["ok"] is True
         assert len(result["cells"]) == 0
+
+
+def test_trace_follows_ink_instead_of_paper():
+    from fontTools.pens.boundsPen import BoundsPen
+    from fontTools.svgLib.path import SVGPath
+    from font_creator_tools.extract_glyphs import trace_to_svg
+
+    cell = np.full((100, 100, 3), 255, dtype=np.uint8)
+    cv2.rectangle(cell, (20, 20), (40, 40), (0, 0, 0), -1)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        svg_path = os.path.join(tmp_dir, "ink.svg")
+        trace_to_svg(cell, svg_path)
+        pen = BoundsPen(None)
+        SVGPath(svg_path).draw(pen)
+        left, top, right, bottom = pen.bounds
+        # An inverted PBM traces the entire 100x100 background instead.
+        assert 19 <= left <= 21
+        assert 19 <= top <= 21
+        assert 40 <= right <= 42
+        assert 40 <= bottom <= 42
