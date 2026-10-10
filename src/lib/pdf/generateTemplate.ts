@@ -27,6 +27,11 @@ export const PAGE_MARGIN_PT = 40;
 // MUST match drawRegistrationMarkers below and the Python align/extract tools.
 export const MARKER_MARGIN_PT = 10;
 
+// Height (pt) of the reference-label strip at the top of each cell. Glyph
+// extraction crops only the area below this strip, so the printed label
+// never bleeds into the traced glyph outline. MUST match extract_glyphs.py.
+export const LABEL_HEIGHT_PT = 14;
+
 export function computePageDimensions(grid: GridConfig): {
   widthPt: number;
   heightPt: number;
@@ -67,12 +72,19 @@ export async function generateTemplatePdf(
         borderColor: rgb(0.7, 0.7, 0.7),
         borderWidth: 1,
       });
+      const labelSize = LABEL_HEIGHT_PT * 0.7;
       page.drawText(entry.charValue, {
-        x: x + grid.cellSizePt / 2 - 10,
-        y: y + grid.cellSizePt / 2 - 10,
-        size: grid.cellSizePt * 0.4,
+        x: x + 4,
+        y: y + grid.cellSizePt - labelSize - 2,
+        size: labelSize,
         font,
-        color: rgb(0.85, 0.85, 0.85),
+        color: rgb(0.3, 0.3, 0.3),
+      });
+      page.drawLine({
+        start: { x, y: y + grid.cellSizePt - LABEL_HEIGHT_PT },
+        end: { x: x + grid.cellSizePt, y: y + grid.cellSizePt - LABEL_HEIGHT_PT },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
       });
     });
   }

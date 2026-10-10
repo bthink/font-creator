@@ -47,6 +47,7 @@ def extract_glyphs(
     output_dir: str,
     origin_x_px: float = 0,
     origin_y_px: float = 0,
+    label_height_px: float = 0,
 ) -> dict[str, object]:
     image = cv2.imread(input_path)
     if image is None:
@@ -59,8 +60,10 @@ def extract_glyphs(
         for col in range(columns):
             index = row * columns + col
             # Cells start at the grid origin (page margin), not at pixel (0,0).
+            # The top label_height_px strip holds the printed reference glyph
+            # and is excluded so it never gets traced into the glyph outline.
             x = round(origin_x_px + col * cell_size_px)
-            y = round(origin_y_px + row * cell_size_px)
+            y = round(origin_y_px + row * cell_size_px + label_height_px)
             x_end = round(origin_x_px + (col + 1) * cell_size_px)
             y_end = round(origin_y_px + (row + 1) * cell_size_px)
             cell = image[y:y_end, x:x_end]
@@ -83,6 +86,7 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--origin-x-px", type=float, default=0)
     parser.add_argument("--origin-y-px", type=float, default=0)
+    parser.add_argument("--label-height-px", type=float, default=0)
     args = parser.parse_args()
     result = extract_glyphs(
         args.input,
@@ -92,6 +96,7 @@ def main() -> None:
         args.output_dir,
         args.origin_x_px,
         args.origin_y_px,
+        args.label_height_px,
     )
     print(json.dumps(result))
     sys.exit(0 if result["ok"] else 1)

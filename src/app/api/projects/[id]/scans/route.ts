@@ -12,6 +12,7 @@ import {
   TEMPLATE_DPI,
   PAGE_MARGIN_PT,
   MARKER_MARGIN_PT,
+  LABEL_HEIGHT_PT,
 } from '@/lib/pdf/generateTemplate';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
@@ -83,6 +84,8 @@ export async function POST(
       String(originPx),
       '--origin-y-px',
       String(originPx),
+      '--label-height-px',
+      String(LABEL_HEIGHT_PT * scale),
       '--output-dir',
       glyphOutputDir,
     ]);
