@@ -1,5 +1,10 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { GlyphSetEntry } from '@/lib/db/glyphSets';
+
+const TEMPLATE_FONT_PATH = path.join(process.cwd(), 'src/lib/pdf/fonts/NotoSans-Regular.ttf');
 
 export type GridConfig = {
   columns: number;
@@ -37,7 +42,9 @@ export async function generateTemplatePdf(
   grid: GridConfig,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
+  doc.registerFontkit(fontkit);
+  const fontBytes = fs.readFileSync(TEMPLATE_FONT_PATH);
+  const font = await doc.embedFont(fontBytes);
   const cellsPerPage = grid.columns * grid.rows;
   const { widthPt: pageWidth, heightPt: pageHeight } = computePageDimensions(grid);
 
