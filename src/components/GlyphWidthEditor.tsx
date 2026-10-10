@@ -4,14 +4,25 @@ import type { Glyph } from '@/lib/db/glyphs';
 import { requestJson, errorMessage } from '@/lib/client';
 import { detectedAdvanceWidth } from '@/lib/glyphMetrics';
 import { Icon } from './Icon';
+
+export type GlyphNeighbor = {
+  id: number;
+  charLabel: string;
+  svgPath: string | null;
+  status: Glyph['status'];
+  verticalOffsetOverride: number | null;
+};
+
 export function GlyphWidthEditor({
   glyph,
   charLabel,
+  neighbors,
   onSaved,
 }: {
   glyph: Glyph;
   charLabel: string;
-  onSaved: (status: Glyph['status'], width: number) => void;
+  neighbors: GlyphNeighbor[];
+  onSaved: (status: Glyph['status'], width: number, verticalOffset: number) => void;
 }) {
   const detected = detectedAdvanceWidth(glyph.bboxRaw?.[2] ?? 0);
   const [width, setWidth] = useState(glyph.advanceWidthOverride ?? detected);
@@ -38,7 +49,7 @@ export function GlyphWidthEditor({
       });
       setStatus(nextStatus);
       setSavedWidth(width);
-      onSaved(nextStatus, width);
+      onSaved(nextStatus, width, 0);
     } catch (error) {
       setError(errorMessage(error));
     } finally {

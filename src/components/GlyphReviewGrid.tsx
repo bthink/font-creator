@@ -2,8 +2,24 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { GlyphWithChar } from '@/lib/db/glyphs';
-import { GlyphWidthEditor } from './GlyphWidthEditor';
+import { GlyphWidthEditor, type GlyphNeighbor } from './GlyphWidthEditor';
 import { errorMessage, requestJson } from '@/lib/client';
+
+function neighborsFor(items: GlyphWithChar[], index: number): GlyphNeighbor[] {
+  const candidates = [index - 2, index - 1, index + 1, index + 2]
+    .filter((i) => i >= 0 && i < items.length)
+    .map((i) => items[i]);
+  return candidates
+    .filter((item) => item.svgPath && item.status !== 'failed')
+    .map((item) => ({
+      id: item.id,
+      charLabel: item.charLabel,
+      svgPath: item.svgPath,
+      status: item.status,
+      verticalOffsetOverride: item.verticalOffsetOverride,
+    }));
+}
+
 export function GlyphReviewGrid({
   projectId,
   glyphs,
@@ -81,11 +97,12 @@ export function GlyphReviewGrid({
               key={`${glyph.id}-${glyph.status}`}
               glyph={glyph}
               charLabel={glyph.charLabel}
-              onSaved={(status, width) =>
+              neighbors={neighborsFor(items, items.findIndex((item) => item.id === glyph.id))}
+              onSaved={(status, width, verticalOffset) =>
                 setItems((current) =>
                   current.map((g) =>
                     g.id === glyph.id
-                      ? { ...g, status, advanceWidthOverride: width }
+                      ? { ...g, status, advanceWidthOverride: width, verticalOffsetOverride: verticalOffset }
                       : g,
                   ),
                 )
