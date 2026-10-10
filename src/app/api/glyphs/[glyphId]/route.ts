@@ -25,6 +25,16 @@ export async function PATCH(
       );
   }
   if (
+    body.verticalOffsetOverride !== undefined &&
+    (!Number.isInteger(body.verticalOffsetOverride) ||
+      body.verticalOffsetOverride < -150 ||
+      body.verticalOffsetOverride > 150)
+  )
+    return NextResponse.json(
+      { error: 'Pozycja w pionie musi być liczbą całkowitą od -150 do 150.' },
+      { status: 400 },
+    );
+  if (
     body.status !== undefined &&
     !['pending', 'reviewed', 'approved', 'failed'].includes(body.status)
   )
