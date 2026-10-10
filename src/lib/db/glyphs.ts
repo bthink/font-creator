@@ -9,6 +9,7 @@ export type Glyph = {
   advanceWidthOverride: number | null;
   leftBearingOverride: number | null;
   verticalOffsetOverride: number | null;
+  scaleOverride: number | null;
   status: 'pending' | 'reviewed' | 'approved' | 'failed';
 };
 
@@ -21,6 +22,7 @@ type GlyphRow = {
   advance_width_override: number | null;
   left_bearing_override: number | null;
   vertical_offset_override: number | null;
+  scale_override: number | null;
   status: 'pending' | 'reviewed' | 'approved' | 'failed';
 };
 
@@ -34,6 +36,7 @@ function toGlyph(row: GlyphRow): Glyph {
     advanceWidthOverride: row.advance_width_override,
     leftBearingOverride: row.left_bearing_override,
     verticalOffsetOverride: row.vertical_offset_override,
+    scaleOverride: row.scale_override,
     status: row.status,
   };
 }
@@ -120,6 +123,7 @@ export type ApprovedGlyphForBuild = {
   bboxRaw: [number, number, number, number];
   advanceWidthOverride: number | null;
   verticalOffsetOverride: number | null;
+  scaleOverride: number | null;
 };
 
 type ApprovedGlyphForBuildRow = {
@@ -130,6 +134,7 @@ type ApprovedGlyphForBuildRow = {
   bbox_raw: string;
   advance_width_override: number | null;
   vertical_offset_override: number | null;
+  scale_override: number | null;
 };
 
 export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForBuild[] {
@@ -137,7 +142,8 @@ export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForB
   const rows = db
     .prepare(
       `SELECT glyph_set.char_value, glyph_set.type, glyph_set.component_chars,
-              glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override, glyphs.vertical_offset_override
+              glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override,
+              glyphs.vertical_offset_override, glyphs.scale_override
        FROM glyphs
        JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
        WHERE glyphs.status = 'approved' AND glyph_set.project_id = ?
@@ -153,6 +159,7 @@ export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForB
     bboxRaw: JSON.parse(row.bbox_raw) as [number, number, number, number],
     advanceWidthOverride: row.advance_width_override,
     verticalOffsetOverride: row.vertical_offset_override,
+    scaleOverride: row.scale_override,
   }));
 }
 
@@ -162,6 +169,7 @@ export function updateGlyphOverrides(
     advanceWidthOverride?: number;
     leftBearingOverride?: number;
     verticalOffsetOverride?: number;
+    scaleOverride?: number;
     status?: Glyph['status'];
   },
 ): Glyph | undefined {
@@ -170,11 +178,12 @@ export function updateGlyphOverrides(
   if (!current) return undefined;
 
   db.prepare(
-    'UPDATE glyphs SET advance_width_override = ?, left_bearing_override = ?, vertical_offset_override = ?, status = ? WHERE id = ?',
+    'UPDATE glyphs SET advance_width_override = ?, left_bearing_override = ?, vertical_offset_override = ?, scale_override = ?, status = ? WHERE id = ?',
   ).run(
     overrides.advanceWidthOverride ?? current.advance_width_override,
     overrides.leftBearingOverride ?? current.left_bearing_override,
     overrides.verticalOffsetOverride ?? current.vertical_offset_override,
+    overrides.scaleOverride ?? current.scale_override,
     overrides.status ?? current.status,
     glyphId,
   );
@@ -184,6 +193,7 @@ export function updateGlyphOverrides(
     advance_width_override: overrides.advanceWidthOverride ?? current.advance_width_override,
     left_bearing_override: overrides.leftBearingOverride ?? current.left_bearing_override,
     vertical_offset_override: overrides.verticalOffsetOverride ?? current.vertical_offset_override,
+    scale_override: overrides.scaleOverride ?? current.scale_override,
     status: overrides.status ?? current.status,
   });
 }

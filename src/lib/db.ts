@@ -11,6 +11,9 @@ function migrate(db: Database.Database): void {
   if (!columns.some((column) => column.name === 'vertical_offset_override')) {
     db.exec('ALTER TABLE glyphs ADD COLUMN vertical_offset_override INTEGER');
   }
+  if (!columns.some((column) => column.name === 'scale_override')) {
+    db.exec('ALTER TABLE glyphs ADD COLUMN scale_override INTEGER');
+  }
 }
 
 export function getDb(): Database.Database {
