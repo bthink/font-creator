@@ -88,6 +88,33 @@ describe('glyphs', () => {
     expect(glyphs[0].bboxRaw).toEqual([0, 0, 10, 10]);
   });
 
+  it('lists the latest glyph for every character across all scans in a project', async () => {
+    const { createGlyph, listCurrentGlyphsWithCharLabel } = await import('./glyphs');
+    const { createScan } = await import('./scans');
+    const { project, entry, scan } = await setup();
+    const replacementScan = createScan(project.id, scan.templateVersionId, '/path/to/new-scan.jpg');
+
+    createGlyph(entry.id, scan.id, '/path/to/old.svg', [0, 0, 10, 10]);
+    const latest = createGlyph(entry.id, replacementScan.id, '/path/to/new.svg', [1, 2, 30, 40]);
+
+    expect(listCurrentGlyphsWithCharLabel(project.id)).toEqual([
+      expect.objectContaining({ id: latest.id, charLabel: 'a', bboxRaw: [1, 2, 30, 40] }),
+    ]);
+  });
+
+  it('approves only the latest glyph for each project character', async () => {
+    const { approveCurrentGlyphs, createGlyph, getGlyph } = await import('./glyphs');
+    const { createScan } = await import('./scans');
+    const { project, entry, scan } = await setup();
+    const replacementScan = createScan(project.id, scan.templateVersionId, '/path/to/new-scan.jpg');
+    const oldGlyph = createGlyph(entry.id, scan.id, '/path/to/old.svg', [0, 0, 10, 10]);
+    const latestGlyph = createGlyph(entry.id, replacementScan.id, '/path/to/new.svg', [0, 0, 10, 10]);
+
+    expect(approveCurrentGlyphs(project.id)).toBe(1);
+    expect(getGlyph(oldGlyph.id)?.status).toBe('pending');
+    expect(getGlyph(latestGlyph.id)?.status).toBe('approved');
+  });
+
   it('lists only approved glyphs joined with glyph_set for build', async () => {
     const { createGlyph, updateGlyphOverrides, listApprovedGlyphsForBuild } = await import('./glyphs');
     const { entry, scan } = await setup();

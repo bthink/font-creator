@@ -1,6 +1,8 @@
 import argparse
 import json
 import sys
+import re
+import unicodedata
 from typing import Any
 
 from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
@@ -8,6 +10,7 @@ from fontTools.fontBuilder import FontBuilder
 from fontTools.misc.transform import Transform
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.pens.cu2quPen import Cu2QuPen
 from fontTools.svgLib.path import SVGPath
 
 UNITS_PER_EM = 1000
@@ -17,21 +20,26 @@ DESCENDER = -200
 # Traced glyph SVGs (from potrace) use SVG's y-down coordinate space, while
 # OpenType glyph outlines use a y-up coordinate space. Flip vertically and
 # anchor the drawing at the font's ascender so glyphs render right-side up.
-SVG_TO_FONT_UNITS = Transform(1, 0, 0, -1, 0, ASCENDER)
 
 
 def glyph_name_for_char(char: str) -> str:
-    if len(char) == 1 and char.isalnum():
+    if len(char) == 1 and char.isascii() and char.isalnum():
         return char
     if len(char) == 1:
         return f"uni{ord(char):04X}"
     return f"liga.{'_'.join(str(ord(c)) for c in char)}"
 
 
+def svg_to_font_transform(spec: dict[str, Any]) -> Transform:
+    scale = spec.get("scale", 1)
+    origin_x = spec.get("origin_x", 0)
+    return Transform(scale, 0, 0, -scale, -origin_x * scale, ASCENDER)
+
+
 def build_charstrings(glyph_specs: list[dict[str, Any]]) -> dict[str, Any]:
     charstrings: dict[str, Any] = {}
     for spec in glyph_specs:
-        svg_path = SVGPath(spec["svg_path"], transform=SVG_TO_FONT_UNITS)
+        svg_path = SVGPath(spec["svg_path"], transform=svg_to_font_transform(spec))
         pen = T2CharStringPen(spec["advance_width"], glyphSet=None)
         svg_path.draw(pen)
         charstrings[spec["glyph_name"]] = pen.getCharString()
@@ -42,8 +50,8 @@ def build_glyf_glyphs(glyph_specs: list[dict[str, Any]]) -> dict[str, Any]:
     glyphs: dict[str, Any] = {}
     for spec in glyph_specs:
         pen = TTGlyphPen(glyphSet=None)
-        svg_path = SVGPath(spec["svg_path"], transform=SVG_TO_FONT_UNITS)
-        svg_path.draw(pen)
+        svg_path = SVGPath(spec["svg_path"], transform=svg_to_font_transform(spec))
+        svg_path.draw(Cu2QuPen(pen, max_err=1.0, reverse_direction=True))
         glyphs[spec["glyph_name"]] = pen.glyph()
     return glyphs
 
@@ -64,10 +72,30 @@ def build_font(
     ttf_path: str,
     family_name: str,
 ) -> dict[str, object]:
+    ascii_family = unicodedata.normalize("NFKD", family_name).encode("ascii", "ignore").decode()
+    postscript_name = re.sub(r"[^A-Za-z0-9-]", "", ascii_family)[:63] or "Handwriting"
+    names = {"familyName": family_name, "styleName": "Regular", "fullName": family_name, "psName": postscript_name}
+    # Older projects can contain multi-character entries saved as regular
+    # glyphs. They cannot live in a Unicode cmap, so treat them as ligatures
+    # using their characters as the component sequence. New entries are
+    # validated in the application, but this keeps existing projects buildable.
+    single_specs = [g for g in spec["glyphs"] if len(g["char"]) == 1]
+    implicit_ligatures = [
+        {
+            "chars": g["char"],
+            "component_chars": g["char"],
+            "svg_path": g["svg_path"],
+            "advance_width": g["advance_width"],
+            **{key: g[key] for key in ("scale", "origin_x") if key in g},
+        }
+        for g in spec["glyphs"]
+        if len(g["char"]) > 1
+    ]
+    ligature_specs = [*spec.get("ligatures", []), *implicit_ligatures]
     all_glyphs = [
-        {**g, "glyph_name": glyph_name_for_char(g["char"])} for g in spec["glyphs"]
+        {**g, "glyph_name": glyph_name_for_char(g["char"])} for g in single_specs
     ] + [
-        {**l, "glyph_name": glyph_name_for_char(l["chars"])} for l in spec.get("ligatures", [])
+        {**l, "glyph_name": glyph_name_for_char(l["chars"])} for l in ligature_specs
     ]
 
     single_glyphs = [g for g in all_glyphs if "char" in g]
@@ -85,11 +113,11 @@ def build_font(
     notdef_pen = T2CharStringPen(UNITS_PER_EM // 2, glyphSet=None)
     charstrings = {".notdef": notdef_pen.getCharString()}
     charstrings.update(build_charstrings(all_glyphs))
-    fb.setupCFF(family_name, {"FullName": family_name}, charstrings, {})
+    fb.setupCFF(postscript_name, {"FullName": ascii_family or "Handwriting"}, charstrings, {})
 
     fb.setupHorizontalMetrics({name: (advance_widths[name], 0) for name in glyph_order})
     fb.setupHorizontalHeader(ascent=ASCENDER, descent=DESCENDER)
-    fb.setupNameTable({"familyName": family_name, "styleName": "Regular"})
+    fb.setupNameTable(names)
     fb.setupOS2(
         sTypoAscender=ASCENDER,
         sTypoDescender=DESCENDER,
@@ -98,7 +126,6 @@ def build_font(
     )
     fb.setupPost()
 
-    ligature_specs = spec.get("ligatures", [])
     if ligature_specs:
         setup_ligature_substitution(fb, ligature_specs)
 
@@ -112,7 +139,7 @@ def build_font(
     ttf_builder.setupGlyf(glyf_glyphs)
     ttf_builder.setupHorizontalMetrics({name: (advance_widths[name], 0) for name in glyph_order})
     ttf_builder.setupHorizontalHeader(ascent=ASCENDER, descent=DESCENDER)
-    ttf_builder.setupNameTable({"familyName": family_name, "styleName": "Regular"})
+    ttf_builder.setupNameTable(names)
     ttf_builder.setupOS2(
         sTypoAscender=ASCENDER,
         sTypoDescender=DESCENDER,

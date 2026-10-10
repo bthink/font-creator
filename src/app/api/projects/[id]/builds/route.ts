@@ -5,21 +5,16 @@ import { getProject } from '@/lib/db/projects';
 import { listApprovedGlyphsForBuild } from '@/lib/db/glyphs';
 import { createBuild, listBuilds } from '@/lib/db/builds';
 import { runPythonTool } from '@/lib/python/runPython';
-import { TEMPLATE_DPI } from '@/lib/pdf/generateTemplate';
+import { randomUUID } from 'node:crypto';
+import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI } from '@/lib/glyphMetrics';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
-
-// 1 point = UNITS_PER_EM / 72 font units, and 1 pixel at TEMPLATE_DPI = 72/DPI
-// points, so px -> font units = UNITS_PER_EM / DPI. UNITS_PER_EM (1000) mirrors
-// python/src/font_creator_tools/build_font.py; keep them in sync.
-const UNITS_PER_EM = 1000;
-const PX_TO_FONT_UNITS = UNITS_PER_EM / TEMPLATE_DPI;
 
 function fallbackAdvanceWidth(
   advanceWidthOverride: number | null,
   bboxWidthPx: number,
 ): number {
-  return advanceWidthOverride ?? Math.round(bboxWidthPx * PX_TO_FONT_UNITS);
+  return advanceWidthOverride ?? detectedAdvanceWidth(bboxWidthPx);
 }
 
 function slugifyFilename(name: string): string {
@@ -65,6 +60,8 @@ export async function POST(
     .map((row) => ({
       char: row.charValue,
       svg_path: row.svgPath,
+      scale: FONT_UNITS_PER_EM / SCAN_DPI,
+      origin_x: row.bboxRaw[0],
       advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
     }));
   const ligatures = rows
@@ -73,6 +70,8 @@ export async function POST(
       chars: row.charValue,
       component_chars: row.componentChars,
       svg_path: row.svgPath,
+      scale: FONT_UNITS_PER_EM / SCAN_DPI,
+      origin_x: row.bboxRaw[0],
       advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
     }));
 
@@ -82,8 +81,9 @@ export async function POST(
   await fs.mkdir(buildDir, { recursive: true });
   const specPath = path.join(buildDir, `spec-${Date.now()}.json`);
   const filenameBase = slugifyFilename(project.name);
-  const otfPath = path.join(buildDir, `${filenameBase}.otf`);
-  const ttfPath = path.join(buildDir, `${filenameBase}.ttf`);
+  const version = randomUUID();
+  const otfPath = path.join(buildDir, `${filenameBase}-${version}.otf`);
+  const ttfPath = path.join(buildDir, `${filenameBase}-${version}.ttf`);
   await fs.writeFile(specPath, JSON.stringify({ glyphs, ligatures }));
 
   const result = await runPythonTool('font_creator_tools.build_font', [

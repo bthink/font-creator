@@ -20,8 +20,8 @@ export async function POST(
   if (entries.length === 0) {
     return NextResponse.json({ error: 'glyph set is empty' }, { status: 400 });
   }
-  createTemplateVersion(projectId, DEFAULT_GRID);
   const bytes = await generateTemplatePdf(entries, DEFAULT_GRID);
+  createTemplateVersion(projectId, { ...DEFAULT_GRID, glyphSetIds: entries.map(entry => entry.id) });
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       'Content-Type': 'application/pdf',

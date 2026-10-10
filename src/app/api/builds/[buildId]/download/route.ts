@@ -9,7 +9,7 @@ const DATA_DIR = process.env.DATA_DIR ?? './data';
 // resolved DATA_DIR. The trailing separator on the base prevents a sibling like
 // "data-evil" from matching the "data" prefix.
 function isContained(targetPath: string): boolean {
-  const base = path.resolve(DATA_DIR);
+  const base = path.resolve(/* turbopackIgnore: true */ DATA_DIR);
   const resolved = path.resolve(targetPath);
   return resolved === base || resolved.startsWith(base + path.sep);
 }

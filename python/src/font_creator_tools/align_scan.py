@@ -25,10 +25,16 @@ def find_registration_markers(image: np.ndarray) -> list[Marker]:
     _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    # The page itself, its shadow, and the grid can also form large contours in
+    # a phone photo. A registration marker is deliberately small, so discard
+    # contours that could not possibly be one before ranking candidates. Without
+    # this guard a page contour can replace a real corner marker and produce a
+    # wildly distorted perspective transform.
+    max_marker_area = image.shape[0] * image.shape[1] * 0.02
     candidates: list[Marker] = []
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area < 50:
+        if area < 50 or area > max_marker_area:
             continue
         x, y, w, h = cv2.boundingRect(contour)
         aspect_ratio = w / h if h else 0

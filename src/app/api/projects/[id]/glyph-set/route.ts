@@ -33,6 +33,16 @@ export async function POST(
   if (!body.charValue || !body.type) {
     return NextResponse.json({ error: 'charValue and type are required' }, { status: 400 });
   }
+  if (
+    (body.type !== 'single' && body.type !== 'ligature') ||
+    (body.type === 'single' && [...body.charValue].length !== 1) ||
+    (body.type === 'ligature' && !body.componentChars)
+  ) {
+    return NextResponse.json(
+      { error: 'Pojedynczy glif musi zawierać jeden znak, a ligatura znaki składowe.' },
+      { status: 400 },
+    );
+  }
   const entry = addGlyphSetEntry(projectId, body.charValue, body.type, body.componentChars);
   return NextResponse.json(entry, { status: 201 });
 }

@@ -1,156 +1,264 @@
 'use client';
-
 import { useState } from 'react';
 import { GLYPH_PRESETS } from '@/lib/glyphPresets';
-
-type GlyphSetEntry = {
-  id: number;
-  charValue: string;
-  type: 'single' | 'ligature';
-  componentChars: string | null;
+import { requestJson, errorMessage } from '@/lib/client';
+import type { GlyphSetEntry } from '@/lib/db/glyphSets';
+import { Icon } from './Icon';
+const presetNames: Record<string, [string, string]> = {
+  english: ['Alfabet angielski', 'Aa Bb Cc'],
+  polish: ['Alfabet polski', 'Ąą Ęę Łł'],
+  icelandic: ['Alfabet islandzki', 'Ðð Þþ Ææ'],
+  digits: ['Cyfry', '0123456789'],
+  'basic-punctuation': ['Interpunkcja', '.,!?;:'],
+  'basic-math': ['Matematyka', '+ − = × ÷'],
+  'basic-currencies': ['Waluty', '$ € £ ¥'],
 };
 
 export function GlyphSetEditor({
   projectId,
   initialEntries,
+  onEntriesChange,
 }: {
   projectId: number;
   initialEntries: GlyphSetEntry[];
-}): React.JSX.Element {
+  onEntriesChange?: (entries: GlyphSetEntry[]) => void;
+}) {
   const [entries, setEntries] = useState(initialEntries);
   const [charValue, setCharValue] = useState('');
   const [componentChars, setComponentChars] = useState('');
   const [isLigature, setIsLigature] = useState(false);
-  const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]);
-
-  function togglePreset(presetId: string): void {
-    setSelectedPresetIds((current) =>
-      current.includes(presetId)
-        ? current.filter((id) => id !== presetId)
-        : [...current, presetId],
-    );
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [query, setQuery] = useState('');
+  function update(next: GlyphSetEntry[]) {
+    setEntries(next);
+    onEntriesChange?.(next);
   }
-
-  async function handleApplyPresets(): Promise<void> {
-    const charValues = [
-      ...new Set(
-        GLYPH_PRESETS.filter((preset) => selectedPresetIds.includes(preset.id)).flatMap(
-          (preset) => preset.chars,
+  async function mutate(action: () => Promise<void>) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await action();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function applyPresets() {
+    await mutate(async () => {
+      const charValues = [
+        ...new Set(
+          GLYPH_PRESETS.filter((p) => selected.includes(p.id)).flatMap(
+            (p) => p.chars,
+          ),
         ),
-      ),
-    ];
-    if (charValues.length === 0) return;
-    const response = await fetch(`/api/projects/${projectId}/glyph-set/bulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ charValues }),
+      ];
+      const { added } = await requestJson<{ added: GlyphSetEntry[] }>(
+        `/api/projects/${projectId}/glyph-set/bulk`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ charValues }),
+        },
+      );
+      if (added.length) update([...entries, ...added]);
+      setSelected([]);
+      setMessage(
+        added.length
+          ? `Dodano ${added.length} znaków. Powtarzające się znaki zostały pominięte.`
+          : 'Wszystkie wybrane znaki są już w zestawie.',
+      );
     });
-    const { added } = (await response.json()) as { added: GlyphSetEntry[] };
-    setEntries([...entries, ...added]);
-    setSelectedPresetIds([]);
   }
-
-  async function handleAdd(event: React.FormEvent): Promise<void> {
+  async function add(event: React.FormEvent) {
     event.preventDefault();
-    const response = await fetch(`/api/projects/${projectId}/glyph-set`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        charValue,
-        type: isLigature ? 'ligature' : 'single',
-        componentChars: isLigature ? componentChars : undefined,
-      }),
+    if (entries.some((e) => e.charValue === charValue)) {
+      setError('Ten znak jest już w zestawie.');
+      return;
+    }
+    if (!isLigature && [...charValue].length !== 1) {
+      setError('Wpisz jeden znak lub włącz opcję ligatury.');
+      return;
+    }
+    await mutate(async () => {
+      const entry = await requestJson<GlyphSetEntry>(
+        `/api/projects/${projectId}/glyph-set`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            charValue,
+            type: isLigature ? 'ligature' : 'single',
+            componentChars: isLigature ? componentChars : undefined,
+          }),
+        },
+      );
+      update([...entries, entry]);
+      setCharValue('');
+      setComponentChars('');
+      setMessage('Znak został dodany.');
     });
-    const entry = (await response.json()) as GlyphSetEntry;
-    setEntries([...entries, entry]);
-    setCharValue('');
-    setComponentChars('');
   }
-
-  async function handleRemove(id: number): Promise<void> {
-    await fetch(`/api/projects/${projectId}/glyph-set/${id}`, { method: 'DELETE' });
-    setEntries(entries.filter((entry) => entry.id !== id));
+  async function remove(entry: GlyphSetEntry) {
+    if (
+      !window.confirm(
+        `Usunąć znak „${entry.charValue}”? Zostaną usunięte również jego zeskanowane glify.`,
+      )
+    )
+      return;
+    await mutate(async () => {
+      await requestJson(`/api/projects/${projectId}/glyph-set/${entry.id}`, {
+        method: 'DELETE',
+      });
+      update(entries.filter((e) => e.id !== entry.id));
+      setMessage('Znak został usunięty.');
+    });
   }
-
   return (
-    <section>
-      <h2 className="text-lg font-semibold">Character set</h2>
-      <fieldset className="mt-2 rounded border p-2">
-        <legend className="text-sm font-medium">Presets</legend>
-        <div className="flex flex-wrap gap-3">
-          {GLYPH_PRESETS.map((preset) => (
-            <label key={preset.id} className="flex items-center gap-1 text-sm">
+    <div>
+      <fieldset className="preset-fieldset" disabled={busy}>
+        <legend className="field-label">Gotowe zestawy</legend>
+        <div className="preset-grid">
+          {GLYPH_PRESETS.map((p) => (
+            <label
+              className={`preset-card ${selected.includes(p.id) ? 'selected' : ''}`}
+              key={p.id}
+            >
               <input
                 type="checkbox"
-                checked={selectedPresetIds.includes(preset.id)}
-                onChange={() => togglePreset(preset.id)}
+                checked={selected.includes(p.id)}
+                onChange={() =>
+                  setSelected((current) =>
+                    current.includes(p.id)
+                      ? current.filter((id) => id !== p.id)
+                      : [...current, p.id],
+                  )
+                }
               />
-              {preset.label}
+              <span className="preset-sample">{presetNames[p.id][1]}</span>
+              <span className="preset-name">{presetNames[p.id][0]}</span>
+              <small>{p.chars.length} znaków</small>
             </label>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={handleApplyPresets}
-          disabled={selectedPresetIds.length === 0}
-          className="mt-2 rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
-        >
-          Apply selected
-        </button>
-      </fieldset>
-      <form onSubmit={handleAdd} className="mt-2 flex flex-wrap items-end gap-2">
-        <div>
-          <label htmlFor="char-value" className="block text-sm">
-            Character(s)
-          </label>
-          <input
-            id="char-value"
-            value={charValue}
-            onChange={(event) => setCharValue(event.target.value)}
-            className="rounded border px-2 py-1"
-            required
-          />
+        <div className="preset-actions">
+          <p className="field-hint">
+            Możesz łączyć zestawy. Duplikaty pominiemy.
+          </p>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={!selected.length || busy}
+            onClick={applyPresets}
+          >
+            <Icon name="plus" /> {busy ? 'Zapisywanie...' : 'Dodaj wybrane'}
+          </button>
         </div>
-        {isLigature && (
-          <div>
-            <label htmlFor="component-chars" className="block text-sm">
-              Component characters
+      </fieldset>
+      <details className="custom-character">
+        <summary>
+          Dodaj własny znak lub ligaturę <Icon name="plus" />
+        </summary>
+        <form onSubmit={add}>
+          <div className="form-row">
+            <label className="grow">
+              <span className="field-label">
+                {isLigature ? 'Ligatura, np. fi' : 'Znak, np. &'}
+                <input
+                  className="text-input"
+                  value={charValue}
+                  onChange={(e) => setCharValue(e.target.value)}
+                  required
+                  maxLength={isLigature ? 12 : 2}
+                />
+              </span>
             </label>
-            <input
-              id="component-chars"
-              value={componentChars}
-              onChange={(event) => setComponentChars(event.target.value)}
-              className="rounded border px-2 py-1"
-            />
-          </div>
-        )}
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={isLigature}
-            onChange={(event) => setIsLigature(event.target.checked)}
-          />
-          Ligature
-        </label>
-        <button type="submit" className="rounded bg-blue-600 px-3 py-1 text-white">
-          Add
-        </button>
-      </form>
-      <ul className="mt-4 flex flex-wrap gap-2">
-        {entries.map((entry) => (
-          <li key={entry.id} className="flex items-center gap-1 rounded border px-2 py-1">
-            <span>{entry.charValue}</span>
+            {isLigature && (
+              <label className="grow">
+                <span className="field-label">Znaki składowe, np. fi</span>
+                <input
+                  className="text-input"
+                  value={componentChars}
+                  onChange={(e) => setComponentChars(e.target.value)}
+                  required
+                />
+              </label>
+            )}
             <button
-              type="button"
-              onClick={() => handleRemove(entry.id)}
-              aria-label={`Remove ${entry.charValue}`}
-              className="text-red-600"
+              className="button secondary"
+              disabled={busy || !charValue.trim()}
             >
-              &times;
+              Dodaj znak
             </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+          </div>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={isLigature}
+              onChange={(e) => setIsLigature(e.target.checked)}
+            />{' '}
+            Ligatura - kilka liter połączonych w jeden glif
+          </label>
+        </form>
+      </details>
+      {error && (
+        <p role="alert" className="notice error">
+          {error}
+        </p>
+      )}
+      <div role="status">
+        {message && <p className="notice success">{message}</p>}
+      </div>
+      <div className="section-heading character-heading">
+        <h3>
+          Twój zestaw <span className="count">{entries.length}</span>
+        </h3>
+        {entries.length > 0 && (
+          <input
+            className="text-input character-search"
+            aria-label="Filtruj znaki"
+            placeholder="Znajdź znak..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        )}
+      </div>
+      {entries.length ? (
+        <ul className="character-grid">
+          {entries
+            .filter((e) => e.charValue.includes(query))
+            .map((entry) => (
+              <li key={entry.id} className="character-cell">
+                <span>{entry.charValue}</span>
+                <button
+                  type="button"
+                  aria-label={`Usuń znak ${entry.charValue}`}
+                  title={`Usuń znak ${entry.charValue}`}
+                  disabled={busy}
+                  onClick={() => remove(entry)}
+                >
+                  <Icon name="close" />
+                </button>
+              </li>
+            ))}
+          {!entries.some((e) => e.charValue.includes(query)) && (
+            <li className="muted">Nie ma takiego znaku.</li>
+          )}
+        </ul>
+      ) : (
+        <div className="character-empty">
+          <Icon name="type" />
+          <p>
+            Tu pojawią się Twoje znaki.
+            <br />
+            <span className="muted">Wybierz zestaw powyżej, aby zacząć.</span>
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
