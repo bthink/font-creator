@@ -75,10 +75,27 @@ def build_font(
     ascii_family = unicodedata.normalize("NFKD", family_name).encode("ascii", "ignore").decode()
     postscript_name = re.sub(r"[^A-Za-z0-9-]", "", ascii_family)[:63] or "Handwriting"
     names = {"familyName": family_name, "styleName": "Regular", "fullName": family_name, "psName": postscript_name}
+    # Older projects can contain multi-character entries saved as regular
+    # glyphs. They cannot live in a Unicode cmap, so treat them as ligatures
+    # using their characters as the component sequence. New entries are
+    # validated in the application, but this keeps existing projects buildable.
+    single_specs = [g for g in spec["glyphs"] if len(g["char"]) == 1]
+    implicit_ligatures = [
+        {
+            "chars": g["char"],
+            "component_chars": g["char"],
+            "svg_path": g["svg_path"],
+            "advance_width": g["advance_width"],
+            **{key: g[key] for key in ("scale", "origin_x") if key in g},
+        }
+        for g in spec["glyphs"]
+        if len(g["char"]) > 1
+    ]
+    ligature_specs = [*spec.get("ligatures", []), *implicit_ligatures]
     all_glyphs = [
-        {**g, "glyph_name": glyph_name_for_char(g["char"])} for g in spec["glyphs"]
+        {**g, "glyph_name": glyph_name_for_char(g["char"])} for g in single_specs
     ] + [
-        {**l, "glyph_name": glyph_name_for_char(l["chars"])} for l in spec.get("ligatures", [])
+        {**l, "glyph_name": glyph_name_for_char(l["chars"])} for l in ligature_specs
     ]
 
     single_glyphs = [g for g in all_glyphs if "char" in g]
@@ -109,7 +126,6 @@ def build_font(
     )
     fb.setupPost()
 
-    ligature_specs = spec.get("ligatures", [])
     if ligature_specs:
         setup_ligature_substitution(fb, ligature_specs)
 

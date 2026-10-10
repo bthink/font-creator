@@ -65,6 +65,27 @@ def test_build_font_with_non_alnum_ligature_component():
         assert "GSUB" in font
 
 
+def test_build_font_migrates_legacy_multicharacter_glyph_to_ligature():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        svg_path = os.path.join(tmp_dir, "glyph.svg")
+        with open(svg_path, "w") as handle:
+            handle.write(SIMPLE_SVG)
+
+        spec = {
+            "glyphs": [
+                {"char": "f", "svg_path": svg_path, "advance_width": 600},
+                {"char": "fff", "svg_path": svg_path, "advance_width": 1200},
+            ],
+        }
+        otf_path = os.path.join(tmp_dir, "out.otf")
+        ttf_path = os.path.join(tmp_dir, "out.ttf")
+
+        result = build_font(spec, otf_path, ttf_path, family_name="Legacy Hand")
+
+        assert result["ok"] is True
+        assert "GSUB" in TTFont(otf_path)
+
+
 def test_traced_scan_uses_font_units_and_correct_orientation():
     import cv2
     import numpy as np
