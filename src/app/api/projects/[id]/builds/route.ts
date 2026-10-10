@@ -63,6 +63,7 @@ export async function POST(
       scale: FONT_UNITS_PER_EM / SCAN_DPI,
       origin_x: row.bboxRaw[0],
       advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
+      vertical_offset: row.verticalOffsetOverride ?? 0,
     }));
   const ligatures = rows
     .filter((row) => row.type === 'ligature')
@@ -73,6 +74,7 @@ export async function POST(
       scale: FONT_UNITS_PER_EM / SCAN_DPI,
       origin_x: row.bboxRaw[0],
       advance_width: fallbackAdvanceWidth(row.advanceWidthOverride, row.bboxRaw[2]),
+      vertical_offset: row.verticalOffsetOverride ?? 0,
     }));
 
   // Resolved to an absolute path because the Python build tool is spawned with a

@@ -110,4 +110,39 @@ describe('builds route', () => {
     const expected = Math.round(bboxWidthPx * (1000 / TEMPLATE_DPI));
     expect(spec.glyphs[0].advance_width).toBe(expected);
   });
+
+  it('includes the vertical offset override in the build spec', async () => {
+    const { createProject } = await import('@/lib/db/projects');
+    const { addGlyphSetEntry } = await import('@/lib/db/glyphSets');
+    const { createTemplateVersion } = await import('@/lib/db/templateVersions');
+    const { createScan } = await import('@/lib/db/scans');
+    const { createGlyph, updateGlyphOverrides } = await import('@/lib/db/glyphs');
+    const { POST } = await import('./route');
+
+    const project = createProject('Vertical offset test');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+    const scan = createScan(project.id, templateVersion.id, '/path/to/scan.jpg');
+
+    const svgDir = path.resolve('./data-test-builds-route', 'svgs');
+    fs.mkdirSync(svgDir, { recursive: true });
+    const svgPath = path.join(svgDir, 'v.svg');
+    fs.writeFileSync(svgPath, SVG);
+
+    const entry = addGlyphSetEntry(project.id, 'v', 'single');
+    const glyph = createGlyph(entry.id, scan.id, svgPath, [0, 0, 100, 100]);
+    updateGlyphOverrides(glyph.id, { status: 'approved', advanceWidthOverride: 600, verticalOffsetOverride: -35 });
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await POST(new Request('http://localhost/api/projects/1/builds', { method: 'POST' }), { params });
+
+    const buildDir = path.resolve('./data-test-builds-route', 'projects', String(project.id), 'builds');
+    const specFile = fs.readdirSync(buildDir).find((f) => f.startsWith('spec-'));
+    const spec = JSON.parse(fs.readFileSync(path.join(buildDir, specFile!), 'utf-8'));
+    expect(spec.glyphs[0].vertical_offset).toBe(-35);
+  });
 });
