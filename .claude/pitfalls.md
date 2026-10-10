@@ -1,0 +1,5 @@
+# Pitfalls
+
+- [CONFIRMED] pdf-lib `StandardFonts` (Helvetica etc.) only encode WinAnsi — any non-WinAnsi char (Polish ą/ż/ł, Icelandic þ/ð, math ≠/×, etc.) throws `Error: WinAnsi cannot encode "X"` at `drawText`. Fix: `doc.registerFontkit(fontkit)` + `doc.embedFont(ttfBytes)` with a Unicode-coverage TTF (e.g. Noto Sans) instead of `StandardFonts`.
+- [CONFIRMED] `extract_glyphs.py` has no OCR — glyph identity is purely grid position (`row*columns+col` → `glyph_set` entry order). Any pixels inside the cropped cell rectangle below the ink threshold get traced by potrace, so anything printed inside that rectangle (e.g. a reference label) ends up in the glyph outline. Printed guide text must live in a region excluded from the extraction crop.
+- [CONFIRMED] In `build_font.py`, OpenType feature-syntax (feaLib) rules need actual glyph names, not raw characters. Non-alphanumeric chars get a `uniXXXX` glyph name via `glyph_name_for_char()`; splicing the raw char into the rule string compiles only by luck for alnum chars (where char == glyph name) and throws `FeatureLibError: ... referenced but are missing from the glyph set` for punctuation/symbols.
