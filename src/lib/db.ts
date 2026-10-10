@@ -6,6 +6,13 @@ const DATA_DIR = process.env.DATA_DIR ?? './data';
 
 let instance: Database.Database | undefined;
 
+function migrate(db: Database.Database): void {
+  const columns = db.prepare('PRAGMA table_info(glyphs)').all() as { name: string }[];
+  if (!columns.some((column) => column.name === 'vertical_offset_override')) {
+    db.exec('ALTER TABLE glyphs ADD COLUMN vertical_offset_override INTEGER');
+  }
+}
+
 export function getDb(): Database.Database {
   if (instance) return instance;
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -14,5 +21,6 @@ export function getDb(): Database.Database {
   instance.pragma('foreign_keys = ON');
   const schema = fs.readFileSync(path.join(process.cwd(), 'src/lib/db/schema.sql'), 'utf-8');
   instance.exec(schema);
+  migrate(instance);
   return instance;
 }

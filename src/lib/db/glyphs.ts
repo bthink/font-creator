@@ -8,6 +8,7 @@ export type Glyph = {
   bboxRaw: [number, number, number, number] | null;
   advanceWidthOverride: number | null;
   leftBearingOverride: number | null;
+  verticalOffsetOverride: number | null;
   status: 'pending' | 'reviewed' | 'approved' | 'failed';
 };
 
@@ -19,6 +20,7 @@ type GlyphRow = {
   bbox_raw: string | null;
   advance_width_override: number | null;
   left_bearing_override: number | null;
+  vertical_offset_override: number | null;
   status: 'pending' | 'reviewed' | 'approved' | 'failed';
 };
 
@@ -31,6 +33,7 @@ function toGlyph(row: GlyphRow): Glyph {
     bboxRaw: row.bbox_raw ? (JSON.parse(row.bbox_raw) as [number, number, number, number]) : null,
     advanceWidthOverride: row.advance_width_override,
     leftBearingOverride: row.left_bearing_override,
+    verticalOffsetOverride: row.vertical_offset_override,
     status: row.status,
   };
 }
@@ -116,6 +119,7 @@ export type ApprovedGlyphForBuild = {
   svgPath: string;
   bboxRaw: [number, number, number, number];
   advanceWidthOverride: number | null;
+  verticalOffsetOverride: number | null;
 };
 
 type ApprovedGlyphForBuildRow = {
@@ -125,6 +129,7 @@ type ApprovedGlyphForBuildRow = {
   svg_path: string;
   bbox_raw: string;
   advance_width_override: number | null;
+  vertical_offset_override: number | null;
 };
 
 export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForBuild[] {
@@ -132,7 +137,7 @@ export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForB
   const rows = db
     .prepare(
       `SELECT glyph_set.char_value, glyph_set.type, glyph_set.component_chars,
-              glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override
+              glyphs.svg_path, glyphs.bbox_raw, glyphs.advance_width_override, glyphs.vertical_offset_override
        FROM glyphs
        JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
        WHERE glyphs.status = 'approved' AND glyph_set.project_id = ?
@@ -147,22 +152,29 @@ export function listApprovedGlyphsForBuild(projectId: number): ApprovedGlyphForB
     svgPath: row.svg_path,
     bboxRaw: JSON.parse(row.bbox_raw) as [number, number, number, number],
     advanceWidthOverride: row.advance_width_override,
+    verticalOffsetOverride: row.vertical_offset_override,
   }));
 }
 
 export function updateGlyphOverrides(
   glyphId: number,
-  overrides: { advanceWidthOverride?: number; leftBearingOverride?: number; status?: Glyph['status'] },
+  overrides: {
+    advanceWidthOverride?: number;
+    leftBearingOverride?: number;
+    verticalOffsetOverride?: number;
+    status?: Glyph['status'];
+  },
 ): Glyph | undefined {
   const db = getDb();
   const current = db.prepare('SELECT * FROM glyphs WHERE id = ?').get(glyphId) as GlyphRow | undefined;
   if (!current) return undefined;
 
   db.prepare(
-    'UPDATE glyphs SET advance_width_override = ?, left_bearing_override = ?, status = ? WHERE id = ?',
+    'UPDATE glyphs SET advance_width_override = ?, left_bearing_override = ?, vertical_offset_override = ?, status = ? WHERE id = ?',
   ).run(
     overrides.advanceWidthOverride ?? current.advance_width_override,
     overrides.leftBearingOverride ?? current.left_bearing_override,
+    overrides.verticalOffsetOverride ?? current.vertical_offset_override,
     overrides.status ?? current.status,
     glyphId,
   );
@@ -171,6 +183,7 @@ export function updateGlyphOverrides(
     ...current,
     advance_width_override: overrides.advanceWidthOverride ?? current.advance_width_override,
     left_bearing_override: overrides.leftBearingOverride ?? current.left_bearing_override,
+    vertical_offset_override: overrides.verticalOffsetOverride ?? current.vertical_offset_override,
     status: overrides.status ?? current.status,
   });
 }

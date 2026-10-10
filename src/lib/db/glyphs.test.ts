@@ -115,12 +115,25 @@ describe('glyphs', () => {
     expect(getGlyph(latestGlyph.id)?.status).toBe('approved');
   });
 
+  it('updates and returns the vertical offset override', async () => {
+    const { createGlyph, updateGlyphOverrides, getGlyph } = await import('./glyphs');
+    const { entry, scan } = await setup();
+
+    const glyph = createGlyph(entry.id, scan.id, '/path/to/a.svg', [0, 0, 10, 10]);
+    expect(glyph.verticalOffsetOverride).toBeNull();
+
+    const updated = updateGlyphOverrides(glyph.id, { verticalOffsetOverride: -40 });
+
+    expect(updated?.verticalOffsetOverride).toBe(-40);
+    expect(getGlyph(glyph.id)?.verticalOffsetOverride).toBe(-40);
+  });
+
   it('lists only approved glyphs joined with glyph_set for build', async () => {
     const { createGlyph, updateGlyphOverrides, listApprovedGlyphsForBuild } = await import('./glyphs');
     const { entry, scan } = await setup();
 
     const approved = createGlyph(entry.id, scan.id, '/path/to/a.svg', [0, 0, 10, 20]);
-    updateGlyphOverrides(approved.id, { status: 'approved', advanceWidthOverride: 500 });
+    updateGlyphOverrides(approved.id, { status: 'approved', advanceWidthOverride: 500, verticalOffsetOverride: 25 });
 
     createGlyph(entry.id, scan.id, '/path/to/b.svg', [0, 0, 10, 20]);
 
@@ -131,6 +144,7 @@ describe('glyphs', () => {
     expect(rows[0].type).toBe('single');
     expect(rows[0].svgPath).toBe('/path/to/a.svg');
     expect(rows[0].advanceWidthOverride).toBe(500);
+    expect(rows[0].verticalOffsetOverride).toBe(25);
     expect(rows[0].bboxRaw).toEqual([0, 0, 10, 20]);
   });
 });

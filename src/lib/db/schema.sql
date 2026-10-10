@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS glyphs (
   bbox_raw TEXT,
   advance_width_override INTEGER,
   left_bearing_override INTEGER,
+  vertical_offset_override INTEGER,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'approved', 'failed'))
 );
 
