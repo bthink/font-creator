@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { Glyph } from '@/lib/db/glyphs';
 import { requestJson, errorMessage } from '@/lib/client';
-import { detectedAdvanceWidth } from '@/lib/glyphMetrics';
+import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI } from '@/lib/glyphMetrics';
 import { Icon } from './Icon';
 
 export type GlyphNeighbor = {
@@ -27,12 +27,14 @@ export function GlyphWidthEditor({
   const detected = detectedAdvanceWidth(glyph.bboxRaw?.[2] ?? 0);
   const [width, setWidth] = useState(glyph.advanceWidthOverride ?? detected);
   const [savedWidth, setSavedWidth] = useState(width);
+  const [verticalOffset, setVerticalOffset] = useState(glyph.verticalOffsetOverride ?? 0);
+  const [savedVerticalOffset, setSavedVerticalOffset] = useState(verticalOffset);
   const [status, setStatus] = useState(glyph.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const valid = Number.isInteger(width) && width >= 0 && width <= 5000;
-  const dirty = width !== savedWidth;
+  const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset;
   const previewScale = 45 / Math.max(1, detectedAdvanceWidth(glyph.bboxRaw?.[3] ?? 1));
   async function save(nextStatus: Glyph['status']) {
     if (!valid || busy) return;
@@ -44,12 +46,14 @@ export function GlyphWidthEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           advanceWidthOverride: width,
+          verticalOffsetOverride: verticalOffset,
           status: nextStatus,
         }),
       });
       setStatus(nextStatus);
       setSavedWidth(width);
-      onSaved(nextStatus, width, 0);
+      setSavedVerticalOffset(verticalOffset);
+      onSaved(nextStatus, width, verticalOffset);
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -115,6 +119,61 @@ export function GlyphWidthEditor({
           }
         />
       </div>
+      <label htmlFor={`voffset-${glyph.id}`} className="field-label">
+        Pozycja w pionie
+      </label>
+      <div className="width-controls">
+        <input
+          id={`voffset-${glyph.id}`}
+          aria-label={`Pozycja w pionie glifu ${charLabel}`}
+          type="range"
+          min="-150"
+          max="150"
+          value={verticalOffset}
+          disabled={busy || !usable}
+          onChange={(event) => setVerticalOffset(Number(event.target.value))}
+        />
+        <input
+          className="text-input"
+          aria-label={`Dokładna pozycja w pionie glifu ${charLabel}`}
+          type="number"
+          min="-150"
+          max="150"
+          value={verticalOffset}
+          disabled={busy || !usable}
+          onChange={(e) => setVerticalOffset(Number(e.target.value))}
+        />
+      </div>
+      {usable && neighbors.length > 0 && (
+        <div className="vertical-compare-strip" aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
+          <span className="vertical-compare-line" />
+          {neighbors
+            .filter((neighbor) => neighbor.id !== glyph.id)
+            .map((neighbor) => (
+              <span
+                className="compare-slot"
+                key={neighbor.id}
+                style={{
+                  transform: `translateY(${
+                    -(neighbor.verticalOffsetOverride ?? 0) * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale
+                  }px)`,
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/glyphs/${neighbor.id}/preview`} alt={`Sąsiedni glif ${neighbor.charLabel}`} />
+              </span>
+            ))}
+          <span
+            className="compare-slot current"
+            style={{
+              transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px)`,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/glyphs/${glyph.id}/preview`} alt={`Bieżący glif ${charLabel}`} />
+          </span>
+        </div>
+      )}
       {usable && valid && (
         <div
           className="spacing-preview"
