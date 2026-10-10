@@ -31,7 +31,9 @@ def glyph_name_for_char(char: str) -> str:
 
 
 def svg_to_font_transform(spec: dict[str, Any]) -> Transform:
-    scale = spec.get("scale", 1)
+    base_scale = spec.get("scale", 1)
+    size_scale_percent = spec.get("size_scale_percent", 100)
+    scale = base_scale * (size_scale_percent / 100)
     origin_x = spec.get("origin_x", 0)
     vertical_offset = spec.get("vertical_offset", 0)
     return Transform(scale, 0, 0, -scale, -origin_x * scale, ASCENDER + vertical_offset)

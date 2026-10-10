@@ -150,3 +150,39 @@ def test_vertical_offset_shifts_glyph_outline_in_font_units():
         assert shifted_glyph.yMax - base_glyph.yMax == 40
         assert shifted_glyph.xMin == base_glyph.xMin
         assert shifted_glyph.xMax == base_glyph.xMax
+
+
+def test_size_scale_percent_scales_glyph_outline_around_top_left_anchor():
+    import cv2
+    import numpy as np
+    from font_creator_tools.extract_glyphs import trace_to_svg
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cell = np.full((100, 100, 3), 255, dtype=np.uint8)
+        cv2.rectangle(cell, (20, 20), (40, 50), (0, 0, 0), -1)
+        svg_path = os.path.join(tmp_dir, "scan.svg")
+        trace_to_svg(cell, svg_path)
+
+        base_spec = {"glyphs": [{"char": "a", "svg_path": svg_path, "advance_width": 100, "scale": 1000 / 300, "origin_x": 20}]}
+        scaled_spec = {"glyphs": [{"char": "a", "svg_path": svg_path, "advance_width": 100, "scale": 1000 / 300, "origin_x": 20, "size_scale_percent": 200}]}
+
+        base_otf, base_ttf = os.path.join(tmp_dir, "base.otf"), os.path.join(tmp_dir, "base.ttf")
+        scaled_otf, scaled_ttf = os.path.join(tmp_dir, "scaled.otf"), os.path.join(tmp_dir, "scaled.ttf")
+
+        build_font(base_spec, base_otf, base_ttf, "Base test")
+        build_font(scaled_spec, scaled_otf, scaled_ttf, "Scaled test")
+
+        base_glyph = TTFont(base_ttf)["glyf"]["a"]
+        scaled_glyph = TTFont(scaled_ttf)["glyf"]["a"]
+
+        # origin_x maps to xMin=0 regardless of scale (left edge anchor unchanged).
+        assert base_glyph.xMin == 0
+        assert scaled_glyph.xMin == 0
+        # The cell's top edge (SVG y=0) maps to font y=ASCENDER regardless of
+        # scale (top anchor unchanged); yMax is close to ASCENDER for both,
+        # and doubling the scale roughly doubles the outline's width and height.
+        assert scaled_glyph.xMax == 2 * base_glyph.xMax
+        base_height = base_glyph.yMax - base_glyph.yMin
+        scaled_height = scaled_glyph.yMax - scaled_glyph.yMin
+        # Cu2Qu curve conversion may introduce ±1 unit rounding in y coordinates.
+        assert abs(scaled_height - 2 * base_height) <= 1
