@@ -145,4 +145,39 @@ describe('builds route', () => {
     const spec = JSON.parse(fs.readFileSync(path.join(buildDir, specFile!), 'utf-8'));
     expect(spec.glyphs[0].vertical_offset).toBe(-35);
   });
+
+  it('includes the scale override in the build spec', async () => {
+    const { createProject } = await import('@/lib/db/projects');
+    const { addGlyphSetEntry } = await import('@/lib/db/glyphSets');
+    const { createTemplateVersion } = await import('@/lib/db/templateVersions');
+    const { createScan } = await import('@/lib/db/scans');
+    const { createGlyph, updateGlyphOverrides } = await import('@/lib/db/glyphs');
+    const { POST } = await import('./route');
+
+    const project = createProject('Scale override test');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+    const scan = createScan(project.id, templateVersion.id, '/path/to/scan.jpg');
+
+    const svgDir = path.resolve('./data-test-builds-route', 'svgs');
+    fs.mkdirSync(svgDir, { recursive: true });
+    const svgPath = path.join(svgDir, 's.svg');
+    fs.writeFileSync(svgPath, SVG);
+
+    const entry = addGlyphSetEntry(project.id, 's', 'single');
+    const glyph = createGlyph(entry.id, scan.id, svgPath, [0, 0, 100, 100]);
+    updateGlyphOverrides(glyph.id, { status: 'approved', advanceWidthOverride: 600, scaleOverride: 150 });
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await POST(new Request('http://localhost/api/projects/1/builds', { method: 'POST' }), { params });
+
+    const buildDir = path.resolve('./data-test-builds-route', 'projects', String(project.id), 'builds');
+    const specFile = fs.readdirSync(buildDir).find((f) => f.startsWith('spec-'));
+    const spec = JSON.parse(fs.readFileSync(path.join(buildDir, specFile!), 'utf-8'));
+    expect(spec.glyphs[0].size_scale_percent).toBe(150);
+  });
 });
