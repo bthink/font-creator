@@ -51,7 +51,7 @@ def build_glyf_glyphs(glyph_specs: list[dict[str, Any]]) -> dict[str, Any]:
 def setup_ligature_substitution(fb: FontBuilder, ligature_specs: list[dict[str, Any]]) -> None:
     rules = []
     for ligature in ligature_specs:
-        components = " ".join(ligature["component_chars"])
+        components = " ".join(glyph_name_for_char(c) for c in ligature["component_chars"])
         target = glyph_name_for_char(ligature["chars"])
         rules.append(f"sub {components} by {target};")
     feature_code = "feature liga {\n" + "\n".join(rules) + "\n} liga;\n"

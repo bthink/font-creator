@@ -33,3 +33,33 @@ def test_build_font_creates_valid_otf_with_expected_glyphs():
         glyph_name = font.getBestCmap()[ord("a")]
         advance_width, _ = hmtx[glyph_name]
         assert advance_width == 600
+
+
+def test_build_font_with_non_alnum_ligature_component():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        svg_path = os.path.join(tmp_dir, "a.svg")
+        with open(svg_path, "w") as handle:
+            handle.write(SIMPLE_SVG)
+
+        spec = {
+            "glyphs": [
+                {"char": "a", "svg_path": svg_path, "advance_width": 600},
+                {"char": ".", "svg_path": svg_path, "advance_width": 600},
+            ],
+            "ligatures": [
+                {
+                    "chars": "a.",
+                    "component_chars": "a.",
+                    "svg_path": svg_path,
+                    "advance_width": 600,
+                },
+            ],
+        }
+        otf_path = os.path.join(tmp_dir, "out.otf")
+        ttf_path = os.path.join(tmp_dir, "out.ttf")
+
+        result = build_font(spec, otf_path, ttf_path, family_name="Test Hand")
+
+        assert result["ok"] is True
+        font = TTFont(otf_path)
+        assert "GSUB" in font
