@@ -6,14 +6,16 @@ import type { ProjectSummary } from '@/lib/db/projectSummary';
 import type { GlyphSetEntry } from '@/lib/db/glyphSets';
 import type { Build } from '@/lib/db/builds';
 import type { Scan } from '@/lib/db/scans';
+import type { GlyphWithChar } from '@/lib/db/glyphs';
 import { GlyphSetEditor } from './GlyphSetEditor';
 import { TemplateGenerator } from './TemplateGenerator';
 import { ScanUploader } from './ScanUploader';
 import { FontBuildPanel } from './FontBuildPanel';
+import { GlyphReviewGrid } from './GlyphReviewGrid';
 import { Icon } from './Icon';
 import { formatDate } from '@/lib/client';
 
-const steps = ['Znaki', 'Szablon', 'Skan i korekta', 'Gotowy font'];
+const steps = ['Znaki', 'Szablon', 'Skan', 'Korekta glifów', 'Gotowy font'];
 export function ProjectWorkspace({
   project,
   initialEntries,
@@ -21,6 +23,9 @@ export function ProjectWorkspace({
   scans,
   summary,
   hasTemplate,
+  pageCount,
+  uploadedPageIndexes,
+  initialGlyphs,
   initialStep,
 }: {
   project: Project;
@@ -29,14 +34,18 @@ export function ProjectWorkspace({
   scans: Scan[];
   summary: ProjectSummary;
   hasTemplate: boolean;
+  pageCount: number;
+  uploadedPageIndexes: number[];
+  initialGlyphs: GlyphWithChar[];
   initialStep?: string;
 }) {
   const [step, setStep] = useState(
-    initialStep && /^[1-4]$/.test(initialStep) ? Number(initialStep) - 1 : 0,
+    initialStep && /^[1-5]$/.test(initialStep) ? Number(initialStep) - 1 : 0,
   );
   const [entries, setEntries] = useState(initialEntries);
   const [templateReady, setTemplateReady] = useState(hasTemplate);
   const [charactersChanged, setCharactersChanged] = useState(false);
+  const [scanHistory, setScanHistory] = useState(scans);
   function navigate(next: number) {
     setStep(next);
     document.querySelector('.workflow-tabs')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -45,13 +54,15 @@ export function ProjectWorkspace({
   const titles = [
     'Zacznij od alfabetu.',
     'Przenieś pomysł na papier.',
+    'Najpierw zbierz wszystkie strony.',
     'Twój charakter, w każdym znaku.',
     'Czas napisać coś swojego.',
   ];
   const descriptions = [
     'Wybierz gotowe zestawy lub zbuduj własną kolekcję znaków.',
     'Wydrukuj szablon i wypełnij go tak, jak lubisz pisać.',
-    'Wgraj wypełniony szablon, a potem dopracuj odstępy i zatwierdź glify.',
+    'Wgraj każdą stronę wypełnionego szablonu. Kolejność zostanie ustawiona automatycznie.',
+    'Dopracuj odstępy i zatwierdź glify z całego szablonu.',
     'Zbuduj font z zatwierdzonych glifów i zabierz go do swoich projektów.',
   ];
   return (
@@ -93,8 +104,8 @@ export function ProjectWorkspace({
                   event.key === 'Home'
                     ? 0
                     : event.key === 'End'
-                      ? 3
-                      : (index + (event.key === 'ArrowRight' ? 1 : 3)) % 4;
+                  ? 4
+                      : (index + (event.key === 'ArrowRight' ? 1 : 4)) % 5;
                 navigate(next);
                 document.getElementById(`step-${next}`)?.focus();
               }
@@ -115,7 +126,7 @@ export function ProjectWorkspace({
           aria-labelledby={`step-${step}`}
         >
           <div className="workspace-title">
-            <p className="eyebrow">ETAP 0{step + 1} / 04</p>
+            <p className="eyebrow">ETAP 0{step + 1} / 05</p>
             <h2>{titles[step]}</h2>
             <p className="muted">{descriptions[step]}</p>
           </div>
@@ -201,12 +212,17 @@ export function ProjectWorkspace({
             <ScanUploader
               projectId={project.id}
               disabled={!templateReady}
-              pageCount={Math.max(1, Math.ceil(entries.length / 30))}
+              pageCount={pageCount}
+              uploadedPageIndexes={uploadedPageIndexes}
+              onUploaded={(scan) =>
+                setScanHistory((current) => [scan, ...current])
+              }
+              onReview={() => navigate(3)}
             />
-            {scans.length > 0 && (
+            {scanHistory.length > 0 && (
               <div className="scan-history">
                 <h3>Poprzednie skany</h3>
-                {scans.map((scan) => (
+                {scanHistory.map((scan) => (
                   <div className="history-row" key={scan.id}>
                     <Icon name="scan" />
                     <div>
@@ -214,12 +230,13 @@ export function ProjectWorkspace({
                       <small>{formatDate(scan.uploadedAt)}</small>
                     </div>
                     {scan.alignmentStatus === 'aligned' ? (
-                      <Link
+                      <button
+                        type="button"
                         className="text-link"
-                        href={`/projects/${project.id}/review?scanId=${scan.id}`}
+                        onClick={() => navigate(3)}
                       >
                         Sprawdź glify <Icon name="arrow" />
-                      </Link>
+                      </button>
                     ) : (
                       <span className="badge">
                         {scan.alignmentStatus === 'failed'
@@ -236,11 +253,23 @@ export function ProjectWorkspace({
                 <Icon name="back" /> Szablon
               </button>
               <button className="button primary" onClick={() => navigate(3)}>
-                Przejdź do fontu <Icon name="arrow" />
+                Przejdź do korekty <Icon name="arrow" />
               </button>
             </div>
           </div>
           <div hidden={step !== 3}>
+            <GlyphReviewGrid
+              key={initialGlyphs.map((glyph) => glyph.id).join('-')}
+              projectId={project.id}
+              glyphs={initialGlyphs}
+            />
+            <div className="review-bottom">
+              <button className="button primary" onClick={() => navigate(4)}>
+                Przejdź do budowy fontu <Icon name="arrow" />
+              </button>
+            </div>
+          </div>
+          <div hidden={step !== 4}>
             <FontBuildPanel
               projectId={project.id}
               initialBuilds={initialBuilds}
@@ -288,6 +317,7 @@ export function ProjectWorkspace({
                 [
                   'Nie musisz zaczynać od zera. Gotowe zestawy obejmują też polskie znaki i interpunkcję.',
                   'Naturalne różnice między literami nadają fontowi osobisty charakter.',
+                  'Wgraj wszystkie strony szablonu, zanim przejdziesz do korekty.',
                   'Przed zatwierdzeniem sprawdź kształt każdego glifu oraz szerokość odstępu.',
                   'Na macOS otwórz pobrany plik i wybierz „Zainstaluj” w Albumie z czcionkami.',
                 ][step]

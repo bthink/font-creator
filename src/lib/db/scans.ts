@@ -53,3 +53,22 @@ export function listScans(projectId: number): Scan[] {
   const rows = getDb().prepare('SELECT * FROM scans WHERE project_id = ? ORDER BY id DESC').all(projectId) as ScanRow[];
   return rows.map(toScan);
 }
+
+export function listUploadedPageIndexes(
+  projectId: number,
+  templateVersionId: number,
+  cellsPerPage: number,
+): number[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT CAST(glyph_set.sort_order / ? AS INTEGER) AS page_index
+       FROM glyphs
+       JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
+       JOIN scans ON scans.id = glyphs.scan_id
+       WHERE scans.project_id = ? AND scans.template_version_id = ?
+         AND scans.alignment_status = 'aligned'
+       ORDER BY page_index ASC`,
+    )
+    .all(cellsPerPage, projectId, templateVersionId) as { page_index: number }[];
+  return rows.map((row) => row.page_index);
+}

@@ -72,6 +72,43 @@ export function listGlyphsWithCharLabel(scanId: number): GlyphWithChar[] {
   return rows.map((row) => ({ ...toGlyph(row), charLabel: row.char_label }));
 }
 
+export function listCurrentGlyphsWithCharLabel(projectId: number): GlyphWithChar[] {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT glyphs.*, glyph_set.char_value AS char_label
+       FROM glyphs
+       JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
+       WHERE glyph_set.project_id = ?
+         AND glyphs.id = (
+           SELECT MAX(latest.id)
+           FROM glyphs latest
+           WHERE latest.glyph_set_id = glyphs.glyph_set_id
+         )
+       ORDER BY glyph_set.sort_order ASC`,
+    )
+    .all(projectId) as GlyphWithCharRow[];
+  return rows.map((row) => ({ ...toGlyph(row), charLabel: row.char_label }));
+}
+
+export function approveCurrentGlyphs(projectId: number): number {
+  const result = getDb()
+    .prepare(
+      `UPDATE glyphs
+       SET status = 'approved'
+       WHERE id IN (
+         SELECT MAX(latest.id)
+         FROM glyphs latest
+         JOIN glyph_set ON glyph_set.id = latest.glyph_set_id
+         WHERE glyph_set.project_id = ?
+         GROUP BY latest.glyph_set_id
+       )
+         AND status != 'approved'`,
+    )
+    .run(projectId);
+  return result.changes;
+}
+
 export type ApprovedGlyphForBuild = {
   charValue: string;
   type: 'single' | 'ligature';

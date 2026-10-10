@@ -1,30 +1,37 @@
 'use client';
 import { useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { requestJson, errorMessage } from '@/lib/client';
+import type { Scan } from '@/lib/db/scans';
 import { Icon } from './Icon';
 export function ScanUploader({
   projectId,
   disabled,
   pageCount,
+  uploadedPageIndexes,
+  onUploaded,
+  onReview,
 }: {
   projectId: number;
   disabled?: boolean;
   pageCount: number;
+  uploadedPageIndexes: number[];
+  onUploaded: (scan: Scan & { pageIndex: number }) => void;
+  onReview: () => void;
 }) {
   const router = useRouter();
-  const [pageIndex, setPageIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
-  const [reviewId, setReviewId] = useState<number | null>(null);
+  const [uploadedPages, setUploadedPages] = useState(uploadedPageIndexes);
+  const nextPageIndex = Array.from({ length: pageCount }, (_, index) => index).find(
+    (index) => !uploadedPages.includes(index),
+  );
   async function upload(file?: File) {
     if (!file || busy || disabled) return;
     setError('');
-    setReviewId(null);
     if (!['image/png', 'image/jpeg'].includes(file.type)) {
       setError('Wybierz skan w formacie PNG lub JPG.');
       return;
@@ -38,8 +45,7 @@ export function ScanUploader({
     try {
       const data = new FormData();
       data.append('file', file);
-      data.append('pageIndex', String(pageIndex));
-      const result = await requestJson<{ id: number; alignmentStatus: string }>(
+      const result = await requestJson<Scan & { pageIndex: number }>(
         `/api/projects/${projectId}/scans`,
         { method: 'POST', body: data },
       );
@@ -47,7 +53,12 @@ export function ScanUploader({
         throw new Error(
           'Nie udało się odczytać znaczników. Zeskanuj całą stronę bez przycinania rogów i spróbuj ponownie.',
         );
-      setReviewId(result.id);
+      setUploadedPages((current) =>
+        current.includes(result.pageIndex)
+          ? current
+          : [...current, result.pageIndex].sort((a, b) => a - b),
+      );
+      onUploaded(result);
       router.refresh();
     } catch (error) {
       setError(errorMessage(error));
@@ -60,24 +71,11 @@ export function ScanUploader({
   return (
     <div>
       {pageCount > 1 && (
-        <label className="field-label">
-          Którą stronę szablonu wgrywasz?
-          <select
-            className="page-select"
-            value={pageIndex}
-            onChange={(e) => setPageIndex(Number(e.target.value))}
-            disabled={busy || disabled}
-          >
-            {Array.from({ length: pageCount }, (_, index) => (
-              <option value={index} key={index}>
-                Strona {index + 1} z {pageCount}
-              </option>
-            ))}
-          </select>
-          <span className="field-hint">
-            Wgraj każdą stronę osobno, wybierając jej numer z PDF.
-          </span>
-        </label>
+        <p className="field-hint">
+          {nextPageIndex === undefined
+            ? `Wgrano wszystkie ${pageCount} strony szablonu.`
+            : `Teraz wgraj stronę ${nextPageIndex + 1} z ${pageCount}. Kolejność stron jest ustawiana automatycznie.`}
+        </p>
       )}
       <div
         className={`upload-zone ${dragging ? 'dragging' : ''} ${disabled ? 'is-disabled' : ''}`}
@@ -139,15 +137,16 @@ export function ScanUploader({
           {error}
         </p>
       )}
-      {reviewId !== null && (
+      {nextPageIndex === undefined && (
         <div className="notice success" role="status">
-          <p>Skan został odczytany. Sprawdź wyodrębnione glify.</p>
-          <Link
+          <p>Wszystkie strony zostały odczytane. Sprawdź teraz cały zestaw glifów.</p>
+          <button
+            type="button"
             className="button primary"
-            href={`/projects/${projectId}/review?scanId=${reviewId}`}
+            onClick={onReview}
           >
             Przejdź do korekty <Icon name="arrow" />
-          </Link>
+          </button>
         </div>
       )}
     </div>

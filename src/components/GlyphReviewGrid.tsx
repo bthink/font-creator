@@ -1,10 +1,21 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { GlyphWithChar } from '@/lib/db/glyphs';
 import { GlyphWidthEditor } from './GlyphWidthEditor';
-export function GlyphReviewGrid({ glyphs }: { glyphs: GlyphWithChar[] }) {
+import { errorMessage, requestJson } from '@/lib/client';
+export function GlyphReviewGrid({
+  projectId,
+  glyphs,
+}: {
+  projectId: number;
+  glyphs: GlyphWithChar[];
+}) {
+  const router = useRouter();
   const [items, setItems] = useState(glyphs);
   const [filter, setFilter] = useState('all');
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [error, setError] = useState('');
   const approved = items.filter((g) => g.status === 'approved').length;
   const visible = items.filter(
     (g) =>
@@ -13,6 +24,24 @@ export function GlyphReviewGrid({ glyphs }: { glyphs: GlyphWithChar[] }) {
         ? g.status === 'approved'
         : g.status !== 'approved'),
   );
+  async function approveAll() {
+    if (approvingAll || !items.length) return;
+    setApprovingAll(true);
+    setError('');
+    try {
+      await requestJson(`/api/projects/${projectId}/glyphs/approve`, {
+        method: 'POST',
+      });
+      setItems((current) =>
+        current.map((glyph) => ({ ...glyph, status: 'approved' })),
+      );
+      router.refresh();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setApprovingAll(false);
+    }
+  }
   return (
     <div>
       <div className="review-toolbar">
@@ -35,12 +64,21 @@ export function GlyphReviewGrid({ glyphs }: { glyphs: GlyphWithChar[] }) {
         <span className="muted" role="status">
           {approved} z {items.length} zatwierdzonych
         </span>
+        <button
+          type="button"
+          className="button primary bulk-approve"
+          disabled={!items.length || approved === items.length || approvingAll}
+          onClick={() => void approveAll()}
+        >
+          {approvingAll ? 'Zatwierdzanie...' : 'Zatwierdź wszystkie'}
+        </button>
       </div>
+      {error && <p className="notice error" role="alert">{error}</p>}
       {visible.length ? (
         <div className="review-grid">
           {visible.map((glyph) => (
             <GlyphWidthEditor
-              key={glyph.id}
+              key={`${glyph.id}-${glyph.status}`}
               glyph={glyph}
               charLabel={glyph.charLabel}
               onSaved={(status, width) =>

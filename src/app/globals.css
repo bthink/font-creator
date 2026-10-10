@@ -749,7 +749,7 @@ select {
 }
 .workflow-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-bottom: 1px solid var(--line);
   margin: 0 0 30px;
 }

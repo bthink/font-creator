@@ -42,10 +42,10 @@ async function fixture() {
   const glyph = createGlyph(a.id, scan.id, svgPath, [0, 0, 150, 150]);
   return { project, a, b, scan, glyph, svgPath };
 }
-function scanRequest(pageIndex = '1') {
+function scanRequest(pageIndex?: string) {
   const data = new FormData();
   data.append('file', new File(['scan'], 'scan.png', { type: 'image/png' }));
-  data.append('pageIndex', pageIndex);
+  if (pageIndex !== undefined) data.append('pageIndex', pageIndex);
   return new NextRequest('http://localhost/api/projects/1/scans', {
     method: 'POST',
     body: data,
@@ -98,7 +98,9 @@ describe('studio workflow', () => {
     expect(getGlyph(glyph.id)?.status).toBe('pending');
   });
   it('maps the second scanned page to its own characters', async () => {
-    const { project, b, svgPath } = await fixture();
+    const { project, b, scan: previousScan, svgPath } = await fixture();
+    const { updateScanAlignment } = await import('./db/scans');
+    updateScanAlignment(previousScan.id, 'aligned');
     const { runPythonTool } = await import('./python/runPython');
     vi.mocked(runPythonTool)
       .mockResolvedValueOnce({ ok: true })
@@ -112,6 +114,7 @@ describe('studio workflow', () => {
     });
     expect(response.status).toBe(200);
     const scan = await response.json();
+    expect(scan.pageIndex).toBe(1);
     const { listGlyphsByScan } = await import('./db/glyphs');
     expect(listGlyphsByScan(scan.id)[0].glyphSetId).toBe(b.id);
   });
@@ -158,5 +161,16 @@ describe('studio workflow', () => {
     ]);
     const { getProjectSummary } = await import('./db/projectSummary');
     expect(getProjectSummary(project.id).approved).toBe(1);
+  });
+  it('approves the current glyphs through the project endpoint', async () => {
+    const { project, glyph } = await fixture();
+    const { POST } = await import('../app/api/projects/[id]/glyphs/approve/route');
+    const response = await POST(new Request('http://localhost/approve', { method: 'POST' }), {
+      params: Promise.resolve({ id: String(project.id) }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ approved: 1 });
+    const { getGlyph } = await import('./db/glyphs');
+    expect(getGlyph(glyph.id)?.status).toBe('approved');
   });
 });

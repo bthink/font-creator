@@ -3,7 +3,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getProject } from '@/lib/db/projects';
 import { getLatestTemplateVersion } from '@/lib/db/templateVersions';
-import { createScan, updateScanAlignment } from '@/lib/db/scans';
+import {
+  createScan,
+  listUploadedPageIndexes,
+  updateScanAlignment,
+} from '@/lib/db/scans';
 import { listGlyphSetEntries } from '@/lib/db/glyphSets';
 import { createGlyph } from '@/lib/db/glyphs';
 import { runPythonTool } from '@/lib/python/runPython';
@@ -66,8 +70,18 @@ export async function POST(
       { status: 400 },
     );
   }
-  const pageIndex = Number(formData.get('pageIndex') ?? 0);
   const cellsPerPage = grid.columns * grid.rows;
+  const requestedPageIndex = formData.get('pageIndex');
+  const uploadedPageIndexes = listUploadedPageIndexes(
+    projectId,
+    templateVersion.id,
+    cellsPerPage,
+  );
+  const pageIndex =
+    requestedPageIndex === null
+      ? Array.from({ length: Math.ceil(entries.length / cellsPerPage) }, (_, index) => index)
+          .find((index) => !uploadedPageIndexes.includes(index)) ?? 0
+      : Number(requestedPageIndex);
   if (
     !Number.isInteger(pageIndex) ||
     pageIndex < 0 ||
@@ -167,6 +181,7 @@ export async function POST(
     return NextResponse.json({
       ...scan,
       alignmentStatus: result.ok ? 'aligned' : 'failed',
+      pageIndex,
     });
   } catch {
     updateScanAlignment(scan.id, 'failed');

@@ -18,6 +18,14 @@ def test_find_registration_markers_detects_four_corners():
     assert len(markers) == 4
 
 
+def test_find_registration_markers_ignores_large_page_contour():
+    image = make_test_image_with_markers()
+    cv2.rectangle(image, (80, 80), (320, 520), (0, 0, 0), -1)
+    markers = find_registration_markers(image)
+    assert len(markers) == 4
+    assert all(marker.area < 1000 for marker in markers)
+
+
 import tempfile
 import os
 from font_creator_tools.align_scan import align_scan
