@@ -50,3 +50,4 @@ data-*/
 python/.venv/
 __pycache__/
 *.pyc
+.playwright-mcp/
