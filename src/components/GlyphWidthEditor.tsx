@@ -11,6 +11,7 @@ export type GlyphNeighbor = {
   svgPath: string | null;
   status: Glyph['status'];
   verticalOffsetOverride: number | null;
+  scaleOverride: number | null;
 };
 
 export function GlyphWidthEditor({
@@ -22,19 +23,21 @@ export function GlyphWidthEditor({
   glyph: Glyph;
   charLabel: string;
   neighbors: GlyphNeighbor[];
-  onSaved: (status: Glyph['status'], width: number, verticalOffset: number) => void;
+  onSaved: (status: Glyph['status'], width: number, verticalOffset: number, scale: number) => void;
 }) {
   const detected = detectedAdvanceWidth(glyph.bboxRaw?.[2] ?? 0);
   const [width, setWidth] = useState(glyph.advanceWidthOverride ?? detected);
   const [savedWidth, setSavedWidth] = useState(width);
   const [verticalOffset, setVerticalOffset] = useState(glyph.verticalOffsetOverride ?? 0);
   const [savedVerticalOffset, setSavedVerticalOffset] = useState(verticalOffset);
+  const [scale, setScale] = useState(glyph.scaleOverride ?? 100);
+  const [savedScale, setSavedScale] = useState(scale);
   const [status, setStatus] = useState(glyph.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const valid = Number.isInteger(width) && width >= 0 && width <= 5000;
-  const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset;
+  const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset || scale !== savedScale;
   const previewScale = 45 / Math.max(1, detectedAdvanceWidth(glyph.bboxRaw?.[3] ?? 1));
   async function save(nextStatus: Glyph['status']) {
     if (!valid || busy) return;
@@ -47,13 +50,15 @@ export function GlyphWidthEditor({
         body: JSON.stringify({
           advanceWidthOverride: width,
           verticalOffsetOverride: verticalOffset,
+          scaleOverride: scale,
           status: nextStatus,
         }),
       });
       setStatus(nextStatus);
       setSavedWidth(width);
       setSavedVerticalOffset(verticalOffset);
-      onSaved(nextStatus, width, verticalOffset);
+      setSavedScale(scale);
+      onSaved(nextStatus, width, verticalOffset, scale);
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -87,6 +92,7 @@ export function GlyphWidthEditor({
             src={`/api/glyphs/${glyph.id}/preview`}
             alt={`Zeskanowany glif ${charLabel}`}
             onError={() => setPreviewFailed(true)}
+            style={{ transform: `scale(${scale / 100})`, transformOrigin: 'top left' }}
           />
         ) : (
           <p className="muted">Podgląd niedostępny. Wgraj skan ponownie.</p>
@@ -144,6 +150,31 @@ export function GlyphWidthEditor({
           onChange={(e) => setVerticalOffset(Number(e.target.value))}
         />
       </div>
+      <label htmlFor={`scale-${glyph.id}`} className="field-label">
+        Rozmiar
+      </label>
+      <div className="width-controls">
+        <input
+          id={`scale-${glyph.id}`}
+          aria-label={`Rozmiar glifu ${charLabel}`}
+          type="range"
+          min="50"
+          max="200"
+          value={scale}
+          disabled={busy || !usable}
+          onChange={(event) => setScale(Number(event.target.value))}
+        />
+        <input
+          className="text-input"
+          aria-label={`Dokładny rozmiar glifu ${charLabel} w procentach`}
+          type="number"
+          min="50"
+          max="200"
+          value={scale}
+          disabled={busy || !usable}
+          onChange={(e) => setScale(Number(e.target.value))}
+        />
+      </div>
       {usable && neighbors.length > 0 && (
         <div className="vertical-compare-strip" aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
           <span className="vertical-compare-line" />
@@ -156,7 +187,7 @@ export function GlyphWidthEditor({
                 style={{
                   transform: `translateY(${
                     -(neighbor.verticalOffsetOverride ?? 0) * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale
-                  }px)`,
+                  }px) scale(${(neighbor.scaleOverride ?? 100) / 100})`,
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -166,7 +197,7 @@ export function GlyphWidthEditor({
           <span
             className="compare-slot current"
             style={{
-              transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px)`,
+              transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${scale / 100})`,
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
