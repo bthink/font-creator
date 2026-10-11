@@ -1813,3 +1813,14 @@ select {
 }
 .workflow-tabs { scroll-margin-top: 16px; }
 @media (max-width: 680px) { .workflow-tabs { scroll-margin-top: 82px; } }
+
+.scan-thumbnail {
+  width: 70px;
+  height: 90px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  background: white;
+  flex-shrink: 0;
+}
+.history-row select { max-width: 100%; padding: 8px; }
+.history-row strong { overflow-wrap: anywhere; }

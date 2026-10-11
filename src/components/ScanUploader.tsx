@@ -1,14 +1,14 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { requestJson, errorMessage } from '@/lib/client';
-import type { Scan } from '@/lib/db/scans';
 import { Icon } from './Icon';
 
 type StagedFile = {
   id: string;
   file: File;
   pageIndex: number;
+  error?: string;
 };
 
 let stagingCounter = 0;
@@ -18,15 +18,13 @@ export function ScanUploader({
   disabled,
   pageCount,
   uploadedPageIndexes,
-  onUploaded,
-  onReview,
+  onBusyChange,
 }: {
   projectId: number;
   disabled?: boolean;
   pageCount: number;
   uploadedPageIndexes: number[];
-  onUploaded: (scan: Scan & { pageIndex: number }) => void;
-  onReview: () => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -34,12 +32,15 @@ export function ScanUploader({
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState('');
   const [staged, setStaged] = useState<StagedFile[]>([]);
-  const [uploadedPages, setUploadedPages] = useState(uploadedPageIndexes);
+  const uploadedPages = uploadedPageIndexes;
+  const [progress, setProgress] = useState('');
+  const assignedPages = staged.filter((entry) => entry.pageIndex >= 0).map((entry) => entry.pageIndex);
+  const duplicatePages = new Set(assignedPages).size !== assignedPages.length;
   const pageIndexes = Array.from({ length: pageCount }, (_, index) => index);
   const nextPageIndex = pageIndexes.find((index) => !uploadedPages.includes(index));
 
   function firstFreePageIndex(taken: number[]): number {
-    return pageIndexes.find((index) => !taken.includes(index)) ?? 0;
+    return pageIndexes.find((index) => !taken.includes(index)) ?? -1;
   }
 
   function stageFiles(files: FileList | File[]) {
@@ -67,7 +68,7 @@ export function ScanUploader({
 
   function updateStagedPage(id: string, pageIndex: number) {
     setStaged((current) =>
-      current.map((entry) => (entry.id === id ? { ...entry, pageIndex } : entry)),
+      current.map((entry) => (entry.id === id ? { ...entry, pageIndex, error: undefined } : entry)),
     );
   }
 
@@ -76,16 +77,18 @@ export function ScanUploader({
   }
 
   async function confirmUpload() {
-    if (!staged.length || busy || disabled) return;
+    if (!staged.length || busy || disabled || duplicatePages || staged.some((entry) => entry.pageIndex < 0)) return;
     setBusy(true);
+    onBusyChange(true);
     setError('');
     const failed: string[] = [];
-    for (const entry of staged) {
+    for (const [index, entry] of staged.entries()) {
+      setProgress(`Przetwarzanie ${index + 1} z ${staged.length}: ${entry.file.name}`);
       try {
         const data = new FormData();
         data.append('file', entry.file);
         data.append('pageIndex', String(entry.pageIndex));
-        const result = await requestJson<Scan & { pageIndex: number }>(
+        const result = await requestJson<{ alignmentStatus: string; pageIndex: number }>(
           `/api/projects/${projectId}/scans`,
           { method: 'POST', body: data },
         );
@@ -94,30 +97,27 @@ export function ScanUploader({
             'Nie udało się odczytać znaczników. Zeskanuj całą stronę bez przycinania rogów.',
           );
         }
-        setUploadedPages((current) =>
-          current.includes(result.pageIndex)
-            ? current
-            : [...current, result.pageIndex].sort((a, b) => a - b),
-        );
-        onUploaded(result);
         setStaged((current) => current.filter((s) => s.id !== entry.id));
       } catch (err) {
-        failed.push(`${entry.file.name}: ${errorMessage(err)}`);
+        const message = errorMessage(err);
+        failed.push(`${entry.file.name}: ${message}`);
+        setStaged((current) => current.map((item) => item.id === entry.id ? { ...item, error: message } : item));
       }
     }
     if (failed.length) setError(failed.join(' · '));
     router.refresh();
     setBusy(false);
+    onBusyChange(false);
     if (input.current) input.current.value = '';
   }
 
   return (
     <div>
-      {pageCount > 1 && (
+      {!disabled && (
         <p className="field-hint">
           {nextPageIndex === undefined
             ? `Wgrano wszystkie ${pageCount} strony szablonu.`
-            : `Zostało do wgrania ${pageCount - uploadedPages.length} z ${pageCount} stron. Dla każdego pliku wybierz, której strony dotyczy.`}
+            : `Zostało do wgrania ${pageCount - uploadedPages.length} z ${pageCount} stron. Brakujące strony: ${pageIndexes.filter((index) => !uploadedPages.includes(index)).map((index) => index + 1).join(', ')}.`}
         </p>
       )}
       <div
@@ -137,11 +137,11 @@ export function ScanUploader({
           <Icon name="scan" />
         </span>
         <h3>
-          {busy ? 'Wgrywamy Twoje strony...' : 'Tu zaczyna się cyfrowa wersja'}
+          {busy ? 'Wgrywamy Twoje strony...' : 'Wybierz skany wypełnionego szablonu'}
         </h3>
         <p>
           {busy
-            ? 'Przetwarzamy skany po kolei.'
+            ? progress
             : 'Przeciągnij jeden lub kilka skanów tutaj, albo wybierz pliki z komputera.'}
         </p>
         <input
@@ -151,6 +151,7 @@ export function ScanUploader({
           multiple
           onChange={(e) => {
             if (e.target.files?.length) stageFiles(e.target.files);
+            e.target.value = '';
           }}
           className="sr-only"
           id="scan-file"
@@ -178,19 +179,22 @@ export function ScanUploader({
       </div>
       {staged.length > 0 && (
         <div className="scan-history">
-          <h3>Do wgrania ({staged.length})</h3>
+          <h3>Sprawdź strony przed wysłaniem ({staged.length})</h3>
+          <p className="field-hint">Numer musi odpowiadać stronie wydrukowanego PDF. Program nie rozpoznaje numerów stron ze skanu.</p>
           {staged.map((entry) => (
             <div className="history-row" key={entry.id}>
-              <Icon name="scan" />
+              <StagedPreview file={entry.file} />
               <div>
                 <strong>{entry.file.name}</strong>
+                {uploadedPages.includes(entry.pageIndex) && <small>Wgrywasz ponownie tę stronę. Nowe glify będą wymagały sprawdzenia.</small>}
+                {entry.error && <p className="form-error" role="alert">{entry.error}</p>}
               </div>
-              {pageCount > 1 ? (
+              {pageCount > 1 || entry.pageIndex < 0 ? (
                 <label className="sr-only" htmlFor={`page-select-${entry.id}`}>
                   Strona szablonu dla pliku {entry.file.name}
                 </label>
               ) : null}
-              {pageCount > 1 && (
+              {(pageCount > 1 || entry.pageIndex < 0) && (
                 <select
                   id={`page-select-${entry.id}`}
                   value={entry.pageIndex}
@@ -199,6 +203,7 @@ export function ScanUploader({
                     updateStagedPage(entry.id, Number(e.target.value))
                   }
                 >
+                  <option value={-1}>Wybierz stronę</option>
                   {pageIndexes.map((index) => (
                     <option key={index} value={index}>
                       Strona {index + 1} z {pageCount}
@@ -222,10 +227,10 @@ export function ScanUploader({
             <button
               type="button"
               className="button primary"
-              disabled={busy}
+              disabled={busy || disabled || duplicatePages || staged.some((entry) => entry.pageIndex < 0)}
               onClick={() => void confirmUpload()}
             >
-              Wgraj {staged.length > 1 ? `${staged.length} plików` : 'plik'}{' '}
+              {busy ? 'Przetwarzanie' : 'Wgraj i odczytaj'} ({staged.length}){' '}
               <Icon name="arrow" />
             </button>
           </div>
@@ -236,14 +241,25 @@ export function ScanUploader({
           {error}
         </p>
       )}
-      {nextPageIndex === undefined && (
-        <div className="notice success" role="status">
-          <p>Wszystkie strony zostały odczytane. Sprawdź teraz cały zestaw glifów.</p>
-          <button type="button" className="button primary" onClick={onReview}>
-            Przejdź do korekty <Icon name="arrow" />
-          </button>
-        </div>
-      )}
+      {duplicatePages && <p role="alert" className="notice error">Każdy plik musi mieć inny numer strony. Usuń nadmiarowy plik lub zmień przypisanie.</p>}
     </div>
+  );
+}
+
+function StagedPreview({ file }: { file: File }) {
+  const image = useRef<HTMLImageElement>(null);
+  const link = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    if (image.current) image.current.src = url;
+    if (link.current) link.current.href = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  // Local files are previewed before they reach the server.
+  return (
+    <a ref={link} target="_blank" rel="noopener noreferrer" aria-label={`Otwórz podgląd ${file.name}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img ref={image} className="scan-thumbnail" alt={`Podgląd ${file.name}`} />
+    </a>
   );
 }
