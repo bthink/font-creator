@@ -5,7 +5,6 @@ import { getProject } from '@/lib/db/projects';
 import { getLatestTemplateVersion } from '@/lib/db/templateVersions';
 import {
   createScan,
-  listUploadedPageIndexes,
   updateScanAlignment,
 } from '@/lib/db/scans';
 import { listGlyphSetEntries } from '@/lib/db/glyphSets';
@@ -19,6 +18,7 @@ import {
   LABEL_HEIGHT_PT,
 } from '@/lib/pdf/generateTemplate';
 
+import { identifyScanPage } from '@/lib/scanPageIdentity';
 import { randomUUID } from 'node:crypto';
 
 export async function POST(
@@ -48,7 +48,7 @@ export async function POST(
 
   if (
     !['image/png', 'image/jpeg'].includes(file.type) ||
-    file.size > 30 * 1024 * 1024
+    !file.size || file.size > 30 * 1024 * 1024
   ) {
     return NextResponse.json(
       { error: 'Wybierz plik PNG lub JPG o rozmiarze do 30 MB.' },
@@ -72,16 +72,19 @@ export async function POST(
   }
   const cellsPerPage = grid.columns * grid.rows;
   const requestedPageIndex = formData.get('pageIndex');
-  const uploadedPageIndexes = listUploadedPageIndexes(
-    projectId,
-    templateVersion.id,
-    cellsPerPage,
-  );
-  const pageIndex =
-    requestedPageIndex === null
-      ? Array.from({ length: Math.ceil(entries.length / cellsPerPage) }, (_, index) => index)
-          .find((index) => !uploadedPageIndexes.includes(index)) ?? 0
-      : Number(requestedPageIndex);
+  let detectedPageIndex: number | null;
+  try {
+    detectedPageIndex = await identifyScanPage(file, { projectId, templateVersionId: templateVersion.id }, Math.ceil(entries.length / cellsPerPage));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Nie udało się rozpoznać strony.' }, { status: 422 });
+  }
+  if (detectedPageIndex === null && requestedPageIndex === null) {
+    return NextResponse.json({ error: 'Nie odczytano kodu strony. Wybierz numer strony z wydrukowanego PDF.' }, { status: 422 });
+  }
+  if (detectedPageIndex !== null && requestedPageIndex !== null && Number(requestedPageIndex) !== detectedPageIndex) {
+    return NextResponse.json({ error: 'Wybrany numer strony nie zgadza się z kodem na skanie.' }, { status: 409 });
+  }
+  const pageIndex = detectedPageIndex ?? (typeof requestedPageIndex === 'string' && /^(0|[1-9]\d*)$/.test(requestedPageIndex) ? Number(requestedPageIndex) : NaN);
   if (
     !Number.isInteger(pageIndex) ||
     pageIndex < 0 ||

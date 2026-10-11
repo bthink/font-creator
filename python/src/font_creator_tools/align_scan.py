@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from font_creator_tools.page_code import read_page_codes
+
 # Canonical raster resolution shared across the scan pipeline. MUST be kept in
 # sync with `TEMPLATE_DPI` in src/lib/pdf/generateTemplate.ts — there is no
 # cross-language shared-config mechanism in this stack, so this code comment is
@@ -76,11 +78,30 @@ def align_scan(
     if image is None:
         return {"ok": False, "error": "cannot_read_image"}
 
-    markers = find_registration_markers(image)
+    payloads, polygons = read_page_codes(image)
+    # QR finder patterns are square too. Exclude the entire code from marker
+    # detection while preserving the original pixels for the output image.
+    marker_image = image.copy()
+    for polygon in polygons:
+        center = polygon.mean(axis=0)
+        expanded = center + (polygon - center) * 1.25
+        cv2.fillConvexPoly(marker_image, expanded.astype(np.int32), (255, 255, 255))
+    markers = find_registration_markers(marker_image)
     if len(markers) != 4:
         return {"ok": False, "error": "markers_not_found", "found": len(markers)}
 
     ordered = order_markers_clockwise(markers)
+    polygon = np.array([[marker.center_x, marker.center_y] for marker in ordered], dtype=np.float32)
+    if not cv2.isContourConvex(polygon.astype(np.int32)) or abs(cv2.contourArea(polygon)) < image.shape[0] * image.shape[1] * 0.15:
+        return {"ok": False, "error": "invalid_marker_geometry"}
+    # The QR corner order follows the code's orientation. Rotate the marker
+    # correspondence for sideways/upside-down pages instead of swapping glyphs.
+    for payload, code_polygon in zip(payloads, polygons):
+        if payload.startswith('FC1:'):
+            edge = code_polygon[1] - code_polygon[0]
+            quarter_turns = int(round(np.arctan2(edge[1], edge[0]) / (np.pi / 2))) % 4
+            ordered = ordered[quarter_turns:] + ordered[:quarter_turns]
+            break
     src_points = np.array(
         [[marker.center_x, marker.center_y] for marker in ordered], dtype=np.float32
     )
