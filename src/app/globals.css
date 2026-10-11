@@ -469,10 +469,14 @@ select {
   gap: 20px;
 }
 .project-card {
+  position: relative;
   background: white;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
+}
+.project-card-link {
+  display: block;
 }
 .project-card:hover {
   border-color: #a9b99e;
@@ -521,6 +525,7 @@ select {
   letter-spacing: -6px;
 }
 .project-delete {
+  z-index: 1;
   position: absolute;
   top: 10px;
   right: 10px;

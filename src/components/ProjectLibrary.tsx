@@ -15,19 +15,21 @@ export function ProjectLibrary({
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('newest');
   const [error, setError] = useState('');
+  const [archiveCandidate, setArchiveCandidate] = useState<Project | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   async function removeProject(project: Project) {
-    if (
-      !window.confirm(
-        `Usunąć projekt „${project.name}”? Projekt zniknie z kolekcji (dane pozostają archiwizowane).`,
-      )
-    )
-      return;
+    if (archiving) return;
+    setArchiving(true);
+    setError('');
     try {
       await requestJson(`/api/projects/${project.id}`, { method: 'DELETE' });
       setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      setArchiveCandidate(null);
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -69,6 +71,20 @@ export function ProjectLibrary({
           {error}
         </p>
       )}
+      {archiveCandidate && (
+        <div className="notice" role="dialog" aria-labelledby="archive-title" aria-describedby="archive-description">
+          <h3 id="archive-title">Archiwizować projekt „{archiveCandidate.name}”?</h3>
+          <p id="archive-description">Projekt zniknie z kolekcji. Jego dane pozostaną zapisane.</p>
+          <div className="panel-footer">
+            <button type="button" className="button secondary" disabled={archiving} onClick={() => setArchiveCandidate(null)}>
+              Anuluj
+            </button>
+            <button type="button" className="button primary" disabled={archiving} onClick={() => void removeProject(archiveCandidate)}>
+              {archiving ? 'Archiwizowanie...' : 'Archiwizuj projekt'}
+            </button>
+          </div>
+        </div>
+      )}
       {projects.length === 0 ? (
         <div className="empty-state">
           <span className="empty-monogram">Ag</span>
@@ -89,53 +105,49 @@ export function ProjectLibrary({
       ) : (
         <div className="project-grid">
           {visible.map((project, index) => (
-            <Link
-              className="project-card"
-              href={`/projects/${project.id}`}
-              key={project.id}
-            >
-              <div className={`project-specimen tone-${index % 3}`}>
-                <span className="badge">
-                  {project.builds
-                    ? 'Gotowy font'
-                    : project.scans
-                      ? 'W opracowaniu'
-                      : 'Szkic'}
-                </span>
-                <span className="project-letters" aria-hidden="true">
-                  {project.name.slice(0, 1).toUpperCase()}
-                  {project.name.slice(0, 1).toLowerCase()}
-                </span>
-                <span className="specimen-label">PRÓBKA TYPOGRAFICZNA</span>
-                <button
-                  type="button"
-                  className="project-delete"
-                  aria-label={`Usuń projekt ${project.name}`}
-                  title={`Usuń projekt ${project.name}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    removeProject(project);
-                  }}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-              <div className="project-card-body">
-                <div className="project-title">
-                  <h3>{project.name}</h3>
-                  <Icon name="arrow" />
+            <article className="project-card" key={project.id}>
+              <Link className="project-card-link" href={`/projects/${project.id}`}>
+
+                <div className={`project-specimen tone-${index % 3}`}>
+                  <span className="badge">
+                    {project.builds
+                      ? 'Gotowy font'
+                      : project.scans
+                        ? 'W opracowaniu'
+                        : 'Szkic'}
+                  </span>
+                  <span className="project-letters" aria-hidden="true">
+                    {project.name.slice(0, 1).toUpperCase()}
+                    {project.name.slice(0, 1).toLowerCase()}
+                  </span>
+                  <span className="specimen-label">PRÓBKA TYPOGRAFICZNA</span>
                 </div>
-                <p>
-                  {project.characters} znaków <span>·</span> {project.approved}{' '}
-                  zatwierdzonych
-                </p>
-                <div className="project-card-bottom">
-                  <span>{formatDate(project.createdAt)}</span>
-                  <span>Otwórz projekt</span>
+                <div className="project-card-body">
+                  <div className="project-title">
+                    <h3>{project.name}</h3>
+                    <Icon name="arrow" />
+                  </div>
+                  <p>
+                    {project.characters} znaków <span>·</span> {project.approved}{' '}
+                    zatwierdzonych
+                  </p>
+                  <div className="project-card-bottom">
+                    <span>{formatDate(project.createdAt)}</span>
+                    <span>Otwórz projekt</span>
+                  </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+              <button
+                type="button"
+                className="project-delete"
+                aria-label={`Usuń projekt ${project.name}`}
+                title={`Usuń projekt ${project.name}`}
+                disabled={archiving}
+                onClick={() => { setError(''); setArchiveCandidate(project); }}
+              >
+                <Icon name="close" />
+              </button>
+            </article>
           ))}
           <Link href="/projects/new" className="new-project-card">
             <span className="plus-circle">
