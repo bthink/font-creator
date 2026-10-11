@@ -248,7 +248,12 @@ export function ProjectWorkspace({
                   <div className="history-row" key={scan.id}>
                     <Icon name="scan" />
                     <div>
-                      <strong>Skan #{scan.id}</strong>
+                      <strong>
+                        Skan #{scan.id}
+                        {pageCount > 1 && scan.pageIndex !== null
+                          ? ` · strona ${scan.pageIndex + 1} z ${pageCount}`
+                          : ''}
+                      </strong>
                       <small>
                         {scan.originalFilename ?? 'brak nazwy pliku'} ·{' '}
                         {formatDate(scan.uploadedAt)}

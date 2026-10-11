@@ -18,6 +18,9 @@ function migrate(db: Database.Database): void {
   if (!scanColumns.some((column) => column.name === 'original_filename')) {
     db.exec('ALTER TABLE scans ADD COLUMN original_filename TEXT');
   }
+  if (!scanColumns.some((column) => column.name === 'page_index')) {
+    db.exec('ALTER TABLE scans ADD COLUMN page_index INTEGER');
+  }
 }
 
 export function getDb(): Database.Database {

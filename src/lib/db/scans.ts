@@ -6,6 +6,7 @@ export type Scan = {
   templateVersionId: number;
   filePath: string;
   originalFilename: string | null;
+  pageIndex: number | null;
   uploadedAt: string;
   alignmentStatus: 'pending' | 'aligned' | 'failed';
 };
@@ -16,6 +17,7 @@ type ScanRow = {
   template_version_id: number;
   file_path: string;
   original_filename: string | null;
+  page_index: number | null;
   uploaded_at: string;
   alignment_status: 'pending' | 'aligned' | 'failed';
 };
@@ -27,6 +29,7 @@ function toScan(row: ScanRow): Scan {
     templateVersionId: row.template_version_id,
     filePath: row.file_path,
     originalFilename: row.original_filename,
+    pageIndex: row.page_index,
     uploadedAt: row.uploaded_at,
     alignmentStatus: row.alignment_status,
   };
@@ -37,13 +40,14 @@ export function createScan(
   templateVersionId: number,
   filePath: string,
   originalFilename?: string,
+  pageIndex?: number,
 ): Scan {
   const db = getDb();
   const result = db
     .prepare(
-      'INSERT INTO scans (project_id, template_version_id, file_path, original_filename) VALUES (?, ?, ?, ?)',
+      'INSERT INTO scans (project_id, template_version_id, file_path, original_filename, page_index) VALUES (?, ?, ?, ?, ?)',
     )
-    .run(projectId, templateVersionId, filePath, originalFilename ?? null);
+    .run(projectId, templateVersionId, filePath, originalFilename ?? null, pageIndex ?? null);
   const row = db.prepare('SELECT * FROM scans WHERE id = ?').get(Number(result.lastInsertRowid)) as ScanRow;
   return toScan(row);
 }
