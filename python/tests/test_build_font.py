@@ -3,9 +3,35 @@ import os
 import tempfile
 
 from fontTools.ttLib import TTFont
+from fontTools.pens.boundsPen import BoundsPen
 from font_creator_tools.build_font import build_font
 
 SIMPLE_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L100 0 L100 100 L0 100 Z"/></svg>'
+
+
+def test_small_punctuation_scale_is_preserved_in_otf_and_ttf():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        svg_path = os.path.join(tmp_dir, "punctuation.svg")
+        with open(svg_path, "w") as handle:
+            handle.write(SIMPLE_SVG)
+        spec = {"glyphs": [
+            {"char": char, "svg_path": svg_path, "advance_width": 50,
+             "size_scale_percent": 10}
+            for char in [".", ","]
+        ]}
+        otf_path = os.path.join(tmp_dir, "out.otf")
+        ttf_path = os.path.join(tmp_dir, "out.ttf")
+        build_font(spec, otf_path, ttf_path, "Small punctuation")
+
+        for file in [otf_path, ttf_path]:
+            with TTFont(file) as font:
+                glyph_set = font.getGlyphSet()
+                for char in [".", ","]:
+                    name = font.getBestCmap()[ord(char)]
+                    pen = BoundsPen(glyph_set)
+                    glyph_set[name].draw(pen)
+                    assert pen.bounds == (0, 790, 10, 800)
+                    assert font["hmtx"][name][0] == 50
 
 
 def test_build_font_creates_valid_otf_with_expected_glyphs():
