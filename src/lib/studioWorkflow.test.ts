@@ -4,6 +4,10 @@ import path from 'node:path';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/python/runPython', () => ({ runPythonTool: vi.fn() }));
+vi.mock('@/lib/scanPageIdentity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./scanPageIdentity')>();
+  return { ...actual, identifyScanPage: vi.fn(async () => null) };
+});
 const dataDir = path.resolve('./data-test-studio');
 
 beforeEach(() => {
@@ -109,7 +113,7 @@ describe('studio workflow', () => {
         cells: [{ index: 0, svg_path: svgPath, bbox: [0, 0, 50, 60] }],
       });
     const { POST } = await import('../app/api/projects/[id]/scans/route');
-    const response = await POST(scanRequest(), {
+    const response = await POST(scanRequest('1'), {
       params: Promise.resolve({ id: String(project.id) }),
     });
     expect(response.status).toBe(200);
@@ -136,7 +140,7 @@ describe('studio workflow', () => {
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: false });
     const { POST } = await import('../app/api/projects/[id]/scans/route');
-    const response = await POST(scanRequest(), {
+    const response = await POST(scanRequest('0'), {
       params: Promise.resolve({ id: String(project.id) }),
     });
     expect(response.status).toBe(422);
@@ -201,6 +205,8 @@ describe('studio workflow', () => {
   });
 
   it('preserves the template version when downloading the same PDF again', async () => {
+    const { runPythonTool } = await import('./python/runPython');
+    vi.mocked(runPythonTool).mockResolvedValue({ ok: true, png: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII=' });
     const { project } = await fixture();
     const { POST } = await import('../app/api/projects/[id]/templates/route');
     const { getLatestTemplateVersion } = await import('./db/templateVersions');
@@ -232,6 +238,33 @@ describe('studio workflow', () => {
     expect((await GET(new Request('http://localhost/preview'), context)).status).toBe(403);
     getDb().prepare('UPDATE scans SET file_path = ? WHERE id = ?').run(path.join(dataDir, 'missing.png'), scan.id);
     expect((await GET(new Request('http://localhost/preview'), context)).status).toBe(404);
+  });
+
+  it('maps a coded scan to its page without a manual page number', async () => {
+    const { project, b, svgPath } = await fixture();
+    const { identifyScanPage } = await import('./scanPageIdentity');
+    vi.mocked(identifyScanPage).mockResolvedValueOnce(1);
+    const { runPythonTool } = await import('./python/runPython');
+    vi.mocked(runPythonTool).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: true, cells: [{ index: 0, svg_path: svgPath, bbox: [0, 0, 50, 60] }] });
+    const { POST } = await import('../app/api/projects/[id]/scans/route');
+    const response = await POST(scanRequest(), { params: Promise.resolve({ id: String(project.id) }) });
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.pageIndex).toBe(1);
+    const { listGlyphsByScan } = await import('./db/glyphs');
+    expect(listGlyphsByScan(result.id)[0].glyphSetId).toBe(b.id);
+  });
+
+  it('requires explicit assignment for an unreadable code and rejects overriding a decoded page', async () => {
+    const { project } = await fixture();
+    const { POST } = await import('../app/api/projects/[id]/scans/route');
+    const context = { params: Promise.resolve({ id: String(project.id) }) };
+    expect((await POST(scanRequest(), context)).status).toBe(422);
+    const { identifyScanPage } = await import('./scanPageIdentity');
+    vi.mocked(identifyScanPage).mockResolvedValueOnce(1);
+    expect((await POST(scanRequest('0'), context)).status).toBe(409);
+    const { listScans } = await import('./db/scans');
+    expect(listScans(project.id)).toHaveLength(1);
   });
 
 });

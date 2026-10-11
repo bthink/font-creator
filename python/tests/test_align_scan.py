@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import pytest
 from font_creator_tools.align_scan import find_registration_markers
 
 
@@ -24,6 +25,37 @@ def test_find_registration_markers_ignores_large_page_contour():
     markers = find_registration_markers(image)
     assert len(markers) == 4
     assert all(marker.area < 1000 for marker in markers)
+
+
+@pytest.mark.parametrize('turns', [0, 1, 2, 3])
+@pytest.mark.parametrize('resolution', [1, 5])
+def test_markers_on_dark_desk_touching_paper_edge(turns, resolution):
+    image = np.full((800, 600, 3), 75, dtype=np.uint8)
+    cv2.rectangle(image, (50, 50), (550, 750), (210, 210, 210), -1)
+    corners = [(90, 90), (538, 90), (538, 690), (90, 690)]
+    for x, y in corners:
+        # The right squares extend beyond the paper and join the desk contour.
+        cv2.rectangle(image, (x, y), (x + 24, y + 24), (15, 15, 15), -1)
+    # Hollow grid cells must not be ranked ahead of the filled marks.
+    for x in [130, 250, 370]:
+        cv2.rectangle(image, (x, 160), (x + 100, 260), (35, 35, 35), 2)
+    image = np.rot90(image, turns).copy()
+    image = cv2.resize(image, None, fx=resolution, fy=resolution)
+    markers = find_registration_markers(image)
+    assert len(markers) == 4
+    expected = np.zeros((800, 600), np.uint8)
+    for x, y in corners:
+        expected[y + 12, x + 12] = 1
+    ys, xs = np.where(np.rot90(expected, turns))
+    for x, y in zip(xs, ys):
+        assert min(np.hypot(marker.center_x / resolution - x, marker.center_y / resolution - y) for marker in markers) < 3
+
+
+def test_missing_edge_marker_is_not_replaced_by_grid_cell():
+    image = make_test_image_with_markers()
+    image[565:600, 365:400] = 255
+    cv2.rectangle(image, (200, 300), (260, 360), (0, 0, 0), 2)
+    assert len(find_registration_markers(image)) == 3
 
 
 import tempfile

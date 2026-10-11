@@ -1,3 +1,5 @@
+import { runPythonTool } from '@/lib/python/runPython';
+import { pageCodePayload } from '@/lib/scanPageIdentity';
 import { SCAN_DPI } from '@/lib/glyphMetrics';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -13,6 +15,7 @@ export type GridConfig = {
   cellSizePt: number;
   markerSizePt: number;
   glyphSetIds?: number[];
+  codeFooterHeightPt?: number;
 };
 
 // Canonical raster resolution shared across the scan pipeline. MUST be kept in
@@ -40,13 +43,14 @@ export function computePageDimensions(grid: GridConfig): {
 } {
   return {
     widthPt: PAGE_MARGIN_PT * 2 + grid.columns * grid.cellSizePt,
-    heightPt: PAGE_MARGIN_PT * 2 + grid.rows * grid.cellSizePt,
+    heightPt: PAGE_MARGIN_PT * 2 + grid.rows * grid.cellSizePt + (grid.codeFooterHeightPt ?? 0),
   };
 }
 
 export async function generateTemplatePdf(
   entries: GlyphSetEntry[],
   grid: GridConfig,
+  identity?: { projectId: number; templateVersionId: number },
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -65,6 +69,15 @@ export async function generateTemplatePdf(
       font,
       color: rgb(0.3, 0.3, 0.3),
     });
+
+    if (identity && grid.codeFooterHeightPt) {
+      const encoded = await runPythonTool('font_creator_tools.page_code', ['--encode', pageCodePayload({ ...identity, pageIndex: Math.floor(pageStart / cellsPerPage) })]);
+      if (!encoded.ok || typeof encoded.png !== 'string') throw new Error('Nie udało się przygotować kodu strony.');
+      const code = await doc.embedPng(Buffer.from(encoded.png, 'base64'));
+      page.drawImage(code, { x: pageWidth - PAGE_MARGIN_PT - 64, y: 32, width: 64, height: 64 });
+      page.drawText('Wgraj skany w dowolnej kolejności.', { x: PAGE_MARGIN_PT, y: 56, size: 10, font });
+      page.drawText('Nie przycinaj kodu ani znaczników w rogach.', { x: PAGE_MARGIN_PT, y: 40, size: 9, font });
+    }
 
     const pageEntries = entries.slice(pageStart, pageStart + cellsPerPage);
     pageEntries.forEach((entry, index) => {

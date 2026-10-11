@@ -1829,3 +1829,11 @@ select {
 }
 .history-row select { max-width: 100%; padding: 8px; }
 .history-row strong { overflow-wrap: anywhere; }
+
+.rescan-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
