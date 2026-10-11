@@ -1783,9 +1783,10 @@ select {
 }
 .vertical-compare-strip {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   min-height: 80px;
   overflow-x: auto;
   padding: 10px 5px;
@@ -1803,8 +1804,7 @@ select {
 }
 .compare-slot {
   display: block;
-  flex-shrink: 0;
-  width: 50px;
+  min-width: 0;
   height: 60px;
 }
 .compare-slot img {

@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import type { Glyph } from '@/lib/db/glyphs';
 import { requestJson, errorMessage } from '@/lib/client';
-import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI } from '@/lib/glyphMetrics';
+import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI, MIN_GLYPH_SCALE, MAX_GLYPH_SCALE } from '@/lib/glyphMetrics';
 import { Icon } from './Icon';
 
 export type GlyphNeighbor = {
   id: number;
+  comparisonSlot: number;
   charLabel: string;
   svgPath: string | null;
   status: Glyph['status'];
@@ -36,7 +37,9 @@ export function GlyphWidthEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
-  const valid = Number.isInteger(width) && width >= 0 && width <= 5000;
+  const valid = Number.isInteger(width) && width >= 0 && width <= 5000
+    && Number.isInteger(verticalOffset) && verticalOffset >= -150 && verticalOffset <= 150
+    && Number.isInteger(scale) && scale >= MIN_GLYPH_SCALE && scale <= MAX_GLYPH_SCALE;
   const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset || scale !== savedScale;
   const previewScale = 45 / Math.max(1, detectedAdvanceWidth(glyph.bboxRaw?.[3] ?? 1));
   async function save(nextStatus: Glyph['status']) {
@@ -151,16 +154,17 @@ export function GlyphWidthEditor({
         />
       </div>
       <label htmlFor={`scale-${glyph.id}`} className="field-label">
-        Rozmiar
+        Rozmiar (%)
       </label>
       <div className="width-controls">
         <input
           id={`scale-${glyph.id}`}
           aria-label={`Rozmiar glifu ${charLabel}`}
           type="range"
-          min="50"
-          max="200"
-          value={scale}
+          min={MIN_GLYPH_SCALE}
+          max={MAX_GLYPH_SCALE}
+          step="1"
+          value={Number.isFinite(scale) ? scale : MIN_GLYPH_SCALE}
           disabled={busy || !usable}
           onChange={(event) => setScale(Number(event.target.value))}
         />
@@ -168,41 +172,43 @@ export function GlyphWidthEditor({
           className="text-input"
           aria-label={`Dokładny rozmiar glifu ${charLabel} w procentach`}
           type="number"
-          min="50"
-          max="200"
-          value={scale}
+          min={MIN_GLYPH_SCALE}
+          max={MAX_GLYPH_SCALE}
+          step="1"
+          value={Number.isNaN(scale) ? '' : scale}
           disabled={busy || !usable}
-          onChange={(e) => setScale(Number(e.target.value))}
+          onChange={(e) => setScale(e.target.value === '' ? NaN : Number(e.target.value))}
         />
       </div>
       {usable && neighbors.length > 0 && (
         <div className="vertical-compare-strip" aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
           <span className="vertical-compare-line" />
-          {neighbors
-            .filter((neighbor) => neighbor.id !== glyph.id)
-            .map((neighbor) => (
+          {[0, 1, 2, 3, 4].map((slot) => {
+            const current = slot === 2;
+            const neighbor = neighbors.find((item) => item.comparisonSlot === slot && item.id !== glyph.id);
+            if (!current && !neighbor) {
+              return <span className="compare-slot" key={slot} aria-hidden="true" />;
+            }
+            const id = current ? glyph.id : neighbor!.id;
+            const label = current ? charLabel : neighbor!.charLabel;
+            const offset = current ? verticalOffset : (neighbor!.verticalOffsetOverride ?? 0);
+            const size = current ? scale : (neighbor!.scaleOverride ?? 100);
+            return (
               <span
-                className="compare-slot"
-                key={neighbor.id}
-                style={{
-                  transform: `translateY(${
-                    -(neighbor.verticalOffsetOverride ?? 0) * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale
-                  }px) scale(${(neighbor.scaleOverride ?? 100) / 100})`,
-                }}
+                className={`compare-slot${current ? ' current' : ''}`}
+                key={slot}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/glyphs/${neighbor.id}/preview`} alt={`Sąsiedni glif ${neighbor.charLabel}`} />
+                <img
+                  src={`/api/glyphs/${id}/preview`}
+                  alt={`${current ? 'Bieżący' : 'Sąsiedni'} glif ${label}`}
+                  style={{
+                    transform: `translateY(${-offset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${size / 100})`,
+                  }}
+                />
               </span>
-            ))}
-          <span
-            className="compare-slot current"
-            style={{
-              transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${scale / 100})`,
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/glyphs/${glyph.id}/preview`} alt={`Bieżący glif ${charLabel}`} />
-          </span>
+            );
+          })}
         </div>
       )}
       {usable && valid && (
@@ -217,7 +223,12 @@ export function GlyphWidthEditor({
               <img
                 src={`/api/glyphs/${glyph.id}/preview`}
                 alt=""
-                style={{ width: detected * previewScale, maxWidth: 'none' }}
+                style={{
+                  width: detected * previewScale,
+                  maxWidth: 'none',
+                  transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${scale / 100})`,
+                  transformOrigin: 'top left',
+                }}
               />
             </span>
           ))}

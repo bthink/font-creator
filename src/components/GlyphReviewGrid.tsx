@@ -6,13 +6,14 @@ import { GlyphWidthEditor, type GlyphNeighbor } from './GlyphWidthEditor';
 import { errorMessage, requestJson } from '@/lib/client';
 
 function neighborsFor(items: GlyphWithChar[], index: number): GlyphNeighbor[] {
-  const candidates = [index - 2, index - 1, index + 1, index + 2]
-    .filter((i) => i >= 0 && i < items.length)
-    .map((i) => items[i]);
+  const candidates = [-2, -1, 1, 2]
+    .filter((offset) => index + offset >= 0 && index + offset < items.length)
+    .map((offset) => ({ item: items[index + offset], comparisonSlot: offset + 2 }));
   return candidates
-    .filter((item) => item.svgPath && item.status !== 'failed')
-    .map((item) => ({
+    .filter(({ item }) => item.svgPath && item.status !== 'failed')
+    .map(({ item, comparisonSlot }) => ({
       id: item.id,
+      comparisonSlot,
       charLabel: item.charLabel,
       svgPath: item.svgPath,
       status: item.status,

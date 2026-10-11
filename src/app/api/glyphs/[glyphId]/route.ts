@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateGlyphOverrides } from '@/lib/db/glyphs';
+import { MIN_GLYPH_SCALE, MAX_GLYPH_SCALE } from '@/lib/glyphMetrics';
 
 export async function PATCH(
   request: NextRequest,
@@ -37,11 +38,11 @@ export async function PATCH(
   if (
     body.scaleOverride !== undefined &&
     (!Number.isInteger(body.scaleOverride) ||
-      body.scaleOverride < 50 ||
-      body.scaleOverride > 200)
+      body.scaleOverride < MIN_GLYPH_SCALE ||
+      body.scaleOverride > MAX_GLYPH_SCALE)
   )
     return NextResponse.json(
-      { error: 'Rozmiar musi być liczbą całkowitą od 50 do 200.' },
+      { error: `Rozmiar musi być liczbą całkowitą od ${MIN_GLYPH_SCALE} do ${MAX_GLYPH_SCALE}.` },
       { status: 400 },
     );
   if (
