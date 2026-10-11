@@ -13,7 +13,7 @@ import { ScanUploader } from './ScanUploader';
 import { FontBuildPanel } from './FontBuildPanel';
 import { GlyphReviewGrid } from './GlyphReviewGrid';
 import { Icon } from './Icon';
-import { formatDate } from '@/lib/client';
+import { formatDate, requestJson, errorMessage } from '@/lib/client';
 
 const steps = ['Znaki', 'Szablon', 'Skan', 'Korekta glifów', 'Gotowy font'];
 export function ProjectWorkspace({
@@ -46,6 +46,23 @@ export function ProjectWorkspace({
   const [templateReady, setTemplateReady] = useState(hasTemplate);
   const [charactersChanged, setCharactersChanged] = useState(false);
   const [scanHistory, setScanHistory] = useState(scans);
+  const [scanError, setScanError] = useState('');
+  async function removeScan(scan: Scan) {
+    if (
+      !window.confirm(
+        `Usunąć ${scan.originalFilename ?? `skan #${scan.id}`}? Wyodrębnione z niego glify również zostaną usunięte.`,
+      )
+    )
+      return;
+    try {
+      await requestJson(`/api/projects/${project.id}/scans/${scan.id}`, {
+        method: 'DELETE',
+      });
+      setScanHistory((current) => current.filter((s) => s.id !== scan.id));
+    } catch (err) {
+      setScanError(errorMessage(err));
+    }
+  }
   function navigate(next: number) {
     setStep(next);
     document.querySelector('.workflow-tabs')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -222,12 +239,20 @@ export function ProjectWorkspace({
             {scanHistory.length > 0 && (
               <div className="scan-history">
                 <h3>Poprzednie skany</h3>
+                {scanError && (
+                  <p className="form-error" role="alert">
+                    {scanError}
+                  </p>
+                )}
                 {scanHistory.map((scan) => (
                   <div className="history-row" key={scan.id}>
                     <Icon name="scan" />
                     <div>
                       <strong>Skan #{scan.id}</strong>
-                      <small>{formatDate(scan.uploadedAt)}</small>
+                      <small>
+                        {scan.originalFilename ?? 'brak nazwy pliku'} ·{' '}
+                        {formatDate(scan.uploadedAt)}
+                      </small>
                     </div>
                     {scan.alignmentStatus === 'aligned' ? (
                       <button
@@ -244,6 +269,14 @@ export function ProjectWorkspace({
                           : 'Nieprzetworzony'}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      aria-label={`Usuń skan ${scan.originalFilename ?? scan.id}`}
+                      title="Usuń skan"
+                      onClick={() => removeScan(scan)}
+                    >
+                      <Icon name="close" />
+                    </button>
                   </div>
                 ))}
               </div>
