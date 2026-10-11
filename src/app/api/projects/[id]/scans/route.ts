@@ -107,7 +107,7 @@ export async function POST(
     computePageDimensions(grid);
   const scale = TEMPLATE_DPI / 72;
 
-  const scan = createScan(projectId, templateVersion.id, alignedPath, file.name);
+  const scan = createScan(projectId, templateVersion.id, alignedPath, file.name, pageIndex);
   try {
     const result = await runPythonTool('font_creator_tools.align_scan', [
       '--input',
