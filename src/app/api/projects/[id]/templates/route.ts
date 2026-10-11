@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getProject } from '@/lib/db/projects';
 import { listGlyphSetEntries } from '@/lib/db/glyphSets';
 import { generateTemplatePdf } from '@/lib/pdf/generateTemplate';
-import { createTemplateVersion } from '@/lib/db/templateVersions';
+import { createTemplateVersion, getLatestTemplateVersion } from '@/lib/db/templateVersions';
 
 const DEFAULT_GRID = { columns: 5, rows: 6, cellSizePt: 90, markerSizePt: 12 };
 
@@ -21,7 +21,12 @@ export async function POST(
     return NextResponse.json({ error: 'glyph set is empty' }, { status: 400 });
   }
   const bytes = await generateTemplatePdf(entries, DEFAULT_GRID);
-  createTemplateVersion(projectId, { ...DEFAULT_GRID, glyphSetIds: entries.map(entry => entry.id) });
+  const grid = { ...DEFAULT_GRID, glyphSetIds: entries.map(entry => entry.id) };
+  const latest = getLatestTemplateVersion(projectId);
+  // Downloading the same layout again must preserve its uploaded pages.
+  if (!latest || JSON.stringify(latest.gridConfig) !== JSON.stringify(grid)) {
+    createTemplateVersion(projectId, grid);
+  }
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       'Content-Type': 'application/pdf',

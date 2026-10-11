@@ -19,7 +19,7 @@ import {
   LABEL_HEIGHT_PT,
 } from '@/lib/pdf/generateTemplate';
 
-const DATA_DIR = process.env.DATA_DIR ?? './data';
+import { randomUUID } from 'node:crypto';
 
 export async function POST(
   request: NextRequest,
@@ -93,14 +93,15 @@ export async function POST(
     );
   }
   const projectDir = path.join(
-    DATA_DIR,
+    process.env.DATA_DIR ?? './data',
     'projects',
     String(projectId),
     'scans',
   );
   await fs.mkdir(projectDir, { recursive: true });
-  const rawPath = path.join(projectDir, `raw-${Date.now()}.png`);
-  const alignedPath = path.join(projectDir, `aligned-${Date.now()}.png`);
+  const uploadId = randomUUID();
+  const rawPath = path.join(projectDir, `raw-${uploadId}.png`);
+  const alignedPath = path.join(projectDir, `aligned-${uploadId}.png`);
   await fs.writeFile(rawPath, Buffer.from(await file.arrayBuffer()));
 
   const { widthPt: pageWidthPt, heightPt: pageHeightPt } =
@@ -163,6 +164,13 @@ export async function POST(
           { status: 422 },
         );
       }
+      if (!Array.isArray(extraction.cells) || extraction.cells.length === 0) {
+        updateScanAlignment(scan.id, 'failed');
+        return NextResponse.json(
+          { error: 'Nie znaleziono odręcznych znaków. Wgraj wypełniony szablon i sprawdź, czy pismo jest wystarczająco ciemne.' },
+          { status: 422 },
+        );
+      }
       if (extraction.ok) {
         const cells = extraction.cells as {
           index: number;
@@ -192,5 +200,7 @@ export async function POST(
       },
       { status: 500 },
     );
+  } finally {
+    await fs.rm(rawPath, { force: true });
   }
 }

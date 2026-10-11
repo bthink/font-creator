@@ -80,7 +80,7 @@ export function listUploadedPageIndexes(
 ): number[] {
   const rows = getDb()
     .prepare(
-      `SELECT DISTINCT CAST(glyph_set.sort_order / ? AS INTEGER) AS page_index
+      `SELECT DISTINCT COALESCE(scans.page_index, CAST(glyph_set.sort_order / ? AS INTEGER)) AS page_index
        FROM glyphs
        JOIN glyph_set ON glyph_set.id = glyphs.glyph_set_id
        JOIN scans ON scans.id = glyphs.scan_id

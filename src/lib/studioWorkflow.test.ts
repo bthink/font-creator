@@ -173,4 +173,65 @@ describe('studio workflow', () => {
     const { getGlyph } = await import('./db/glyphs');
     expect(getGlyph(glyph.id)?.status).toBe('approved');
   });
+  it('rejects a blank scan and does not count it as an uploaded page', async () => {
+    const { project } = await fixture();
+    const { runPythonTool } = await import('./python/runPython');
+    vi.mocked(runPythonTool)
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, cells: [] });
+    const { POST } = await import('../app/api/projects/[id]/scans/route');
+    const response = await POST(scanRequest('0'), { params: Promise.resolve({ id: String(project.id) }) });
+    expect(response.status).toBe(422);
+    expect((await response.json()).error).toContain('odręcznych');
+    const { listScans, listUploadedPageIndexes } = await import('./db/scans');
+    expect(listScans(project.id)[0].alignmentStatus).toBe('failed');
+    expect(listUploadedPageIndexes(project.id, listScans(project.id)[0].templateVersionId, 1)).toEqual([]);
+  });
+
+  it('uses the stored page number even when sort orders have gaps and refreshes after deletion', async () => {
+    const { project, scan, a } = await fixture();
+    const { getDb } = await import('./db');
+    const { updateScanAlignment, listUploadedPageIndexes, deleteScan } = await import('./db/scans');
+    getDb().prepare('UPDATE scans SET page_index = 0 WHERE id = ?').run(scan.id);
+    getDb().prepare('UPDATE glyph_set SET sort_order = 20 WHERE id = ?').run(a.id);
+    updateScanAlignment(scan.id, 'aligned');
+    expect(listUploadedPageIndexes(project.id, scan.templateVersionId, 1)).toEqual([0]);
+    deleteScan(scan.id);
+    expect(listUploadedPageIndexes(project.id, scan.templateVersionId, 1)).toEqual([]);
+  });
+
+  it('preserves the template version when downloading the same PDF again', async () => {
+    const { project } = await fixture();
+    const { POST } = await import('../app/api/projects/[id]/templates/route');
+    const { getLatestTemplateVersion } = await import('./db/templateVersions');
+    const context = { params: Promise.resolve({ id: String(project.id) }) };
+    expect((await POST(new Request('http://localhost/template'), context)).status).toBe(200);
+    const first = getLatestTemplateVersion(project.id)!;
+    await POST(new Request('http://localhost/template'), context);
+    expect(getLatestTemplateVersion(project.id)?.id).toBe(first.id);
+    const { addGlyphSetEntry } = await import('./db/glyphSets');
+    addGlyphSetEntry(project.id, 'c', 'single');
+    await POST(new Request('http://localhost/template'), context);
+    expect(getLatestTemplateVersion(project.id)?.id).toBeGreaterThan(first.id);
+  });
+
+  it('serves scan previews only for their project and inside the data directory', async () => {
+    const { project, scan } = await fixture();
+    const { getDb } = await import('./db');
+    const { GET } = await import('../app/api/projects/[id]/scans/[scanId]/preview/route');
+    const pngPath = path.join(dataDir, 'scan.png');
+    fs.writeFileSync(pngPath, Buffer.from([137, 80, 78, 71]));
+    getDb().prepare('UPDATE scans SET file_path = ? WHERE id = ?').run(pngPath, scan.id);
+    const context = { params: Promise.resolve({ id: String(project.id), scanId: String(scan.id) }) };
+    const response = await GET(new Request('http://localhost/preview'), context);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(fs.readFileSync(pngPath));
+    expect((await GET(new Request('http://localhost/preview'), { params: Promise.resolve({ id: String(project.id + 1), scanId: String(scan.id) }) })).status).toBe(404);
+    getDb().prepare('UPDATE scans SET file_path = ? WHERE id = ?').run(path.resolve('package.json'), scan.id);
+    expect((await GET(new Request('http://localhost/preview'), context)).status).toBe(403);
+    getDb().prepare('UPDATE scans SET file_path = ? WHERE id = ?').run(path.join(dataDir, 'missing.png'), scan.id);
+    expect((await GET(new Request('http://localhost/preview'), context)).status).toBe(404);
+  });
+
 });
