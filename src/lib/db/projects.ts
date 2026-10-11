@@ -26,7 +26,9 @@ export function createProject(name: string): Project {
 
 export function listProjects(): Project[] {
   const db = getDb();
-  const rows = db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all() as ProjectRow[];
+  const rows = db
+    .prepare("SELECT * FROM projects WHERE status = 'active' ORDER BY created_at DESC")
+    .all() as ProjectRow[];
   return rows.map(toProject);
 }
 
@@ -34,4 +36,10 @@ export function getProject(id: number): Project | undefined {
   const db = getDb();
   const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
   return row ? toProject(row) : undefined;
+}
+
+export function archiveProject(id: number): Project | undefined {
+  const db = getDb();
+  db.prepare("UPDATE projects SET status = 'archived' WHERE id = ?").run(id);
+  return getProject(id);
 }

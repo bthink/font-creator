@@ -3,16 +3,34 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Project } from '@/lib/db/projects';
 import type { ProjectSummary } from '@/lib/db/projectSummary';
-import { formatDate } from '@/lib/client';
+import { formatDate, requestJson, errorMessage } from '@/lib/client';
 import { Icon } from './Icon';
 
 export function ProjectLibrary({
-  projects,
+  projects: initialProjects,
 }: {
   projects: (Project & ProjectSummary)[];
 }) {
+  const [projects, setProjects] = useState(initialProjects);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('newest');
+  const [error, setError] = useState('');
+
+  async function removeProject(project: Project) {
+    if (
+      !window.confirm(
+        `Usunąć projekt „${project.name}”? Projekt zniknie z kolekcji (dane pozostają archiwizowane).`,
+      )
+    )
+      return;
+    try {
+      await requestJson(`/api/projects/${project.id}`, { method: 'DELETE' });
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }
+
   const visible = projects
     .filter((p) =>
       p.name.toLocaleLowerCase('pl').includes(query.toLocaleLowerCase('pl')),
@@ -46,6 +64,11 @@ export function ProjectLibrary({
           </select>
         </div>
       </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
       {projects.length === 0 ? (
         <div className="empty-state">
           <span className="empty-monogram">Ag</span>
@@ -84,6 +107,19 @@ export function ProjectLibrary({
                   {project.name.slice(0, 1).toLowerCase()}
                 </span>
                 <span className="specimen-label">PRÓBKA TYPOGRAFICZNA</span>
+                <button
+                  type="button"
+                  className="project-delete"
+                  aria-label={`Usuń projekt ${project.name}`}
+                  title={`Usuń projekt ${project.name}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeProject(project);
+                  }}
+                >
+                  <Icon name="close" />
+                </button>
               </div>
               <div className="project-card-body">
                 <div className="project-title">
