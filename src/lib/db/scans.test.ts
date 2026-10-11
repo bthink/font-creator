@@ -107,4 +107,46 @@ describe('scans', () => {
     const result = getScan(99999);
     expect(result).toBeUndefined();
   });
+
+  it('stores the original filename when provided', async () => {
+    const { createProject } = await import('./projects');
+    const { createTemplateVersion } = await import('./templateVersions');
+    const { createScan } = await import('./scans');
+
+    const project = createProject('Test Project');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+
+    const scan = createScan(
+      project.id,
+      templateVersion.id,
+      '/path/to/scan.jpg',
+      'page-01.jpg',
+    );
+
+    expect(scan.originalFilename).toBe('page-01.jpg');
+  });
+
+  it('deletes a scan', async () => {
+    const { createProject } = await import('./projects');
+    const { createTemplateVersion } = await import('./templateVersions');
+    const { createScan, deleteScan, getScan } = await import('./scans');
+
+    const project = createProject('Test Project');
+    const templateVersion = createTemplateVersion(project.id, {
+      columns: 4,
+      rows: 8,
+      cellSizePt: 72,
+      markerSizePt: 4,
+    });
+
+    const scan = createScan(project.id, templateVersion.id, '/path/to/scan.jpg');
+    deleteScan(scan.id);
+
+    expect(getScan(scan.id)).toBeUndefined();
+  });
 });

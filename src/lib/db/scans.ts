@@ -5,6 +5,7 @@ export type Scan = {
   projectId: number;
   templateVersionId: number;
   filePath: string;
+  originalFilename: string | null;
   uploadedAt: string;
   alignmentStatus: 'pending' | 'aligned' | 'failed';
 };
@@ -14,6 +15,7 @@ type ScanRow = {
   project_id: number;
   template_version_id: number;
   file_path: string;
+  original_filename: string | null;
   uploaded_at: string;
   alignment_status: 'pending' | 'aligned' | 'failed';
 };
@@ -24,16 +26,24 @@ function toScan(row: ScanRow): Scan {
     projectId: row.project_id,
     templateVersionId: row.template_version_id,
     filePath: row.file_path,
+    originalFilename: row.original_filename,
     uploadedAt: row.uploaded_at,
     alignmentStatus: row.alignment_status,
   };
 }
 
-export function createScan(projectId: number, templateVersionId: number, filePath: string): Scan {
+export function createScan(
+  projectId: number,
+  templateVersionId: number,
+  filePath: string,
+  originalFilename?: string,
+): Scan {
   const db = getDb();
   const result = db
-    .prepare('INSERT INTO scans (project_id, template_version_id, file_path) VALUES (?, ?, ?)')
-    .run(projectId, templateVersionId, filePath);
+    .prepare(
+      'INSERT INTO scans (project_id, template_version_id, file_path, original_filename) VALUES (?, ?, ?, ?)',
+    )
+    .run(projectId, templateVersionId, filePath, originalFilename ?? null);
   const row = db.prepare('SELECT * FROM scans WHERE id = ?').get(Number(result.lastInsertRowid)) as ScanRow;
   return toScan(row);
 }
@@ -42,6 +52,11 @@ export function getScan(id: number): Scan | undefined {
   const db = getDb();
   const row = db.prepare('SELECT * FROM scans WHERE id = ?').get(id) as ScanRow | undefined;
   return row ? toScan(row) : undefined;
+}
+
+export function deleteScan(id: number): void {
+  const db = getDb();
+  db.prepare('DELETE FROM scans WHERE id = ?').run(id);
 }
 
 export function updateScanAlignment(scanId: number, status: 'aligned' | 'failed'): void {

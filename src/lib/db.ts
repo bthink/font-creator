@@ -14,6 +14,10 @@ function migrate(db: Database.Database): void {
   if (!columns.some((column) => column.name === 'scale_override')) {
     db.exec('ALTER TABLE glyphs ADD COLUMN scale_override INTEGER');
   }
+  const scanColumns = db.prepare('PRAGMA table_info(scans)').all() as { name: string }[];
+  if (!scanColumns.some((column) => column.name === 'original_filename')) {
+    db.exec('ALTER TABLE scans ADD COLUMN original_filename TEXT');
+  }
 }
 
 export function getDb(): Database.Database {

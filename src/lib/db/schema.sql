@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS scans (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   template_version_id INTEGER NOT NULL REFERENCES template_versions(id) ON DELETE CASCADE,
   file_path TEXT NOT NULL,
+  original_filename TEXT,
   uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
   alignment_status TEXT NOT NULL DEFAULT 'pending' CHECK (alignment_status IN ('pending', 'aligned', 'failed'))
 );

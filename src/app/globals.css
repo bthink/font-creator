@@ -1244,6 +1244,24 @@ select {
   color: var(--muted);
   margin-top: 4px;
 }
+.history-row > button[aria-label^='Usuń skan'] {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #829078;
+  border-radius: 3px;
+  background: #f3f5ee;
+}
+.history-row > button[aria-label^='Usuń skan'] svg {
+  width: 11px;
+  height: 11px;
+}
+.history-row > button[aria-label^='Usuń skan']:hover {
+  background: #fae8e2;
+  color: #99422f;
+}
 .download-links {
   display: flex;
   gap: 7px;
