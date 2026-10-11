@@ -53,7 +53,7 @@ export function ProjectWorkspace({
   async function removeScan(scan: Scan) {
     if (
       !window.confirm(
-        `Usunąć ${scan.originalFilename ?? `skan #${scan.id}`}? Wyodrębnione z niego glify również zostaną usunięte.`,
+        `Usunąć ${scan.originalFilename ?? 'skan strony'}? Wyodrębnione z niego glify również zostaną usunięte.`,
       )
     )
       return;
@@ -255,10 +255,9 @@ export function ProjectWorkspace({
                     <Icon name="scan" />
                     <div>
                       <strong>
-                        Skan #{scan.id}
-                        {pageCount > 1 && scan.pageIndex !== null
-                          ? ` · strona ${scan.pageIndex + 1} z ${pageCount}`
-                          : ''}
+                        {scan.pageIndex !== null
+                          ? `Strona ${scan.pageIndex + 1} z ${pageCount}`
+                          : 'Skan strony'}
                       </strong>
                       <small>
                         {scan.originalFilename ?? 'brak nazwy pliku'} ·{' '}
@@ -287,7 +286,7 @@ export function ProjectWorkspace({
                     )}
                     <button
                       type="button"
-                      aria-label={`Usuń skan ${scan.originalFilename ?? scan.id}`}
+                      aria-label={`Usuń skan ${scan.originalFilename ?? 'strony'}`}
                       title="Usuń skan"
                       disabled={uploadBusy}
                       onClick={() => removeScan(scan)}
