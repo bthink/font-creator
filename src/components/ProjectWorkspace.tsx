@@ -84,7 +84,7 @@ export function ProjectWorkspace({
   const descriptions = [
     'Wybierz gotowe zestawy lub zbuduj własną kolekcję znaków.',
     'Wydrukuj szablon i wypełnij go tak, jak lubisz pisać.',
-    'Wgraj każdą stronę wypełnionego szablonu. Przed wysłaniem sprawdź podgląd i numer strony przypisany do każdego pliku.',
+    'Wgraj każdą stronę wypełnionego szablonu. Możesz wybrać pliki w dowolnej kolejności. Kody na wydruku pozwolą rozpoznać strony automatycznie.',
     'Dopracuj odstępy i zatwierdź glify z całego szablonu.',
     'Zbuduj font z zatwierdzonych glifów i zabierz go do swoich projektów.',
   ];
@@ -192,7 +192,7 @@ export function ProjectWorkspace({
                 [
                   '01',
                   'Drukuj w skali 100%',
-                  'Nie dopasowuj strony do obszaru wydruku. Zachowaj wszystkie znaczniki w rogach.',
+                  'Nie dopasowuj strony do obszaru wydruku. Zachowaj kod QR i wszystkie znaczniki w rogach.',
                 ],
                 [
                   '02',
@@ -202,7 +202,7 @@ export function ProjectWorkspace({
                 [
                   '03',
                   'Zeskanuj całą stronę',
-                  'Najlepiej w 300 DPI, jako PNG lub JPG. Unikaj cieni i zagięć papieru.',
+                  'Najlepiej w 300 DPI, jako PNG lub JPG. Zachowaj całą stronę razem z kodem QR. Unikaj cieni i zagięć papieru.',
                 ],
               ].map(([n, title, text]) => (
                 <div key={n}>
