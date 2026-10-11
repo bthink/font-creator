@@ -99,15 +99,16 @@ export function GlyphReviewGrid({
               glyph={glyph}
               charLabel={glyph.charLabel}
               neighbors={neighborsFor(items, items.findIndex((item) => item.id === glyph.id))}
-              onSaved={(status, width, verticalOffset, scale) =>
+              onSaved={(status, width, verticalOffset, scale) => {
                 setItems((current) =>
                   current.map((g) =>
                     g.id === glyph.id
                       ? { ...g, status, advanceWidthOverride: width, verticalOffsetOverride: verticalOffset, scaleOverride: scale }
                       : g,
                   ),
-                )
-              }
+                );
+                router.refresh();
+              }}
             />
           ))}
         </div>

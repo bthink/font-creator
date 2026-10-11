@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { Project } from '@/lib/db/projects';
 import type { ProjectSummary } from '@/lib/db/projectSummary';
 import type { GlyphSetEntry } from '@/lib/db/glyphSets';
@@ -26,7 +27,7 @@ export function ProjectWorkspace({
   pageCount,
   uploadedPageIndexes,
   initialGlyphs,
-  initialStep,
+  templateVersionId,
 }: {
   project: Project;
   initialEntries: GlyphSetEntry[];
@@ -37,15 +38,17 @@ export function ProjectWorkspace({
   pageCount: number;
   uploadedPageIndexes: number[];
   initialGlyphs: GlyphWithChar[];
-  initialStep?: string;
+  templateVersionId?: number;
 }) {
-  const [step, setStep] = useState(
-    initialStep && /^[1-5]$/.test(initialStep) ? Number(initialStep) - 1 : 0,
-  );
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedStep = searchParams.get('step');
+  const step = selectedStep && /^[1-5]$/.test(selectedStep) ? Number(selectedStep) - 1 : 0;
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [entries, setEntries] = useState(initialEntries);
   const [templateReady, setTemplateReady] = useState(hasTemplate);
   const [charactersChanged, setCharactersChanged] = useState(false);
-  const [scanHistory, setScanHistory] = useState(scans);
+  const scanHistory = scans;
   const [scanError, setScanError] = useState('');
   async function removeScan(scan: Scan) {
     if (
@@ -58,15 +61,18 @@ export function ProjectWorkspace({
       await requestJson(`/api/projects/${project.id}/scans/${scan.id}`, {
         method: 'DELETE',
       });
-      setScanHistory((current) => current.filter((s) => s.id !== scan.id));
+      setScanError('');
+      router.refresh();
     } catch (err) {
       setScanError(errorMessage(err));
     }
   }
   function navigate(next: number) {
-    setStep(next);
+    if (uploadBusy || next === step) return;
     document.querySelector('.workflow-tabs')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    window.history.replaceState(null, '', `?step=${next + 1}`);
+    const url = new URL(window.location.href);
+    url.searchParams.set('step', String(next + 1));
+    window.history.pushState(null, '', url.pathname + url.search + url.hash);
   }
   const titles = [
     'Zacznij od alfabetu.',
@@ -78,7 +84,7 @@ export function ProjectWorkspace({
   const descriptions = [
     'Wybierz gotowe zestawy lub zbuduj własną kolekcję znaków.',
     'Wydrukuj szablon i wypełnij go tak, jak lubisz pisać.',
-    'Wgraj każdą stronę wypełnionego szablonu. Kolejność zostanie ustawiona automatycznie.',
+    'Wgraj każdą stronę wypełnionego szablonu. Przed wysłaniem sprawdź podgląd i numer strony przypisany do każdego pliku.',
     'Dopracuj odstępy i zatwierdź glify z całego szablonu.',
     'Zbuduj font z zatwierdzonych glifów i zabierz go do swoich projektów.',
   ];
@@ -109,6 +115,7 @@ export function ProjectWorkspace({
             key={label}
             id={`step-${index}`}
             role="tab"
+            disabled={uploadBusy}
             aria-selected={step === index}
             aria-controls={`panel-${index}`}
             tabIndex={step === index ? 0 : -1}
@@ -177,6 +184,7 @@ export function ProjectWorkspace({
               onGenerated={() => {
                 setTemplateReady(true);
                 setCharactersChanged(false);
+                router.refresh();
               }}
             />
             <div className="instruction-list">
@@ -227,18 +235,16 @@ export function ProjectWorkspace({
               </p>
             )}
             <ScanUploader
+              key={templateVersionId ?? 'no-template'}
               projectId={project.id}
               disabled={!templateReady}
               pageCount={pageCount}
               uploadedPageIndexes={uploadedPageIndexes}
-              onUploaded={(scan) =>
-                setScanHistory((current) => [scan, ...current])
-              }
-              onReview={() => navigate(3)}
+              onBusyChange={setUploadBusy}
             />
             {scanHistory.length > 0 && (
               <div className="scan-history">
-                <h3>Poprzednie skany</h3>
+                <h3>Historia skanów</h3>
                 {scanError && (
                   <p className="form-error" role="alert">
                     {scanError}
@@ -259,6 +265,11 @@ export function ProjectWorkspace({
                         {formatDate(scan.uploadedAt)}
                       </small>
                     </div>
+                    {scan.alignmentStatus === 'aligned' && (
+                      <a className="text-link" href={`/api/projects/${project.id}/scans/${scan.id}/preview`} target="_blank" rel="noopener noreferrer">
+                        Podgląd skanu
+                      </a>
+                    )}
                     {scan.alignmentStatus === 'aligned' ? (
                       <button
                         type="button"
@@ -278,6 +289,7 @@ export function ProjectWorkspace({
                       type="button"
                       aria-label={`Usuń skan ${scan.originalFilename ?? scan.id}`}
                       title="Usuń skan"
+                      disabled={uploadBusy}
                       onClick={() => removeScan(scan)}
                     >
                       <Icon name="close" />
@@ -287,10 +299,10 @@ export function ProjectWorkspace({
               </div>
             )}
             <div className="panel-footer">
-              <button className="button secondary" onClick={() => navigate(1)}>
+              <button className="button secondary" disabled={uploadBusy} onClick={() => navigate(1)}>
                 <Icon name="back" /> Szablon
               </button>
-              <button className="button primary" onClick={() => navigate(3)}>
+              <button className="button primary" disabled={uploadBusy || !templateReady || uploadedPageIndexes.length < pageCount || !initialGlyphs.length} onClick={() => navigate(3)}>
                 Przejdź do korekty <Icon name="arrow" />
               </button>
             </div>

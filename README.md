@@ -24,18 +24,20 @@ Open http://localhost:3000.
 2. Add characters and ligatures to the character set.
 3. Generate and print the PDF template.
 4. Handwrite each character in its cell, scan the page.
-5. Upload the scan — it's auto-aligned and glyphs are extracted.
+5. Select scans (PNG/JPG, up to 30 MB each), check the previews and assign the printed PDF page numbers, then click upload to align the scans and extract glyphs.
 6. Review each glyph, adjust advance width if spacing looks off, approve it.
 7. Build the font, download the `.otf`/`.ttf`, double-click to install via Font Book.
 
 ## Studio interface
 
-The Polish-language studio guides each project through four steps: character set,
-PDF template, scan and review, and font export. The project library supports search
+The Polish-language studio guides each project through five steps: character set,
+PDF template, scans, glyph review, and font export. The project library supports search
 and sorting. The interface adapts to desktop and mobile screens and supports
 keyboard navigation and visible operation/error states.
 
-- Upload each PDF page separately and select its page number before uploading.
+- Select one or multiple scans and verify the page number for each file before uploading. Page numbers are printed on the PDF; they are not automatically detected.
+- Upload every page before continuing to glyph review. Failed files stay in the queue for retry; successful files appear in scan history with a full-page preview.
+- Downloading the same template again preserves scan progress. Browser back/forward moves between workflow steps.
 - If the character set changes, generate and fill a new template. Templates made
   before the studio update also need to be regenerated once so their character
   mapping can be verified.

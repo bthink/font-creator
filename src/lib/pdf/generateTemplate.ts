@@ -58,6 +58,13 @@ export async function generateTemplatePdf(
   for (let pageStart = 0; pageStart < entries.length; pageStart += cellsPerPage) {
     const page = doc.addPage([pageWidth, pageHeight]);
     drawRegistrationMarkers(page, pageWidth, pageHeight, grid.markerSizePt);
+    page.drawText(`Strona ${Math.floor(pageStart / cellsPerPage) + 1} z ${Math.ceil(entries.length / cellsPerPage)}`, {
+      x: PAGE_MARGIN_PT,
+      y: 20,
+      size: 10,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
 
     const pageEntries = entries.slice(pageStart, pageStart + cellsPerPage);
     pageEntries.forEach((entry, index) => {

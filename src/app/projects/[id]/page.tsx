@@ -11,13 +11,10 @@ import { ProjectWorkspace } from '@/components/ProjectWorkspace';
 export const dynamic = 'force-dynamic';
 export default async function ProjectDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ step?: string }>;
 }) {
   const { id } = await params;
-  const { step } = await searchParams;
   const project = getProject(Number(id));
   if (!project) notFound();
   const summary = getProjectSummary(project.id);
@@ -43,10 +40,10 @@ export default async function ProjectDetailPage({
       scans={listScans(project.id)}
       summary={summary}
       hasTemplate={templateReady}
+      templateVersionId={template?.id}
       pageCount={Math.max(1, pageCount)}
       uploadedPageIndexes={uploadedPageIndexes}
       initialGlyphs={listCurrentGlyphsWithCharLabel(project.id)}
-      initialStep={step}
     />
   );
 }
