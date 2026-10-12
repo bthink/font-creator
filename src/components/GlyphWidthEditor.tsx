@@ -2,8 +2,10 @@
 import { useState } from 'react';
 import type { Glyph } from '@/lib/db/glyphs';
 import { requestJson, errorMessage } from '@/lib/client';
-import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI, MIN_GLYPH_SCALE, MAX_GLYPH_SCALE, MIN_VERTICAL_OFFSET, MAX_VERTICAL_OFFSET } from '@/lib/glyphMetrics';
+import { detectedAdvanceWidth, MIN_GLYPH_SCALE, MAX_GLYPH_SCALE, MIN_VERTICAL_OFFSET, MAX_VERTICAL_OFFSET } from '@/lib/glyphMetrics';
 import { Icon } from './Icon';
+import { GlyphLayoutPreview } from './GlyphLayoutPreview';
+import { glyphPreviewBounds, type PreviewBounds, type PreviewGlyph } from '@/lib/glyphPreview';
 
 export type GlyphNeighbor = {
   id: number;
@@ -13,17 +15,25 @@ export type GlyphNeighbor = {
   status: Glyph['status'];
   verticalOffsetOverride: number | null;
   scaleOverride: number | null;
+  bboxRaw: Glyph['bboxRaw'];
+  advanceWidthOverride: number | null;
 };
 
 export function GlyphWidthEditor({
   glyph,
   charLabel,
   neighbors,
+  previewBounds,
+  previewZoom,
+  onPreviewChange,
   onSaved,
 }: {
   glyph: Glyph;
   charLabel: string;
   neighbors: GlyphNeighbor[];
+  previewBounds: PreviewBounds;
+  previewZoom: number;
+  onPreviewChange: (glyph: PreviewGlyph) => void;
   onSaved: (status: Glyph['status'], width: number, verticalOffset: number, scale: number) => void;
 }) {
   const detected = detectedAdvanceWidth(glyph.bboxRaw?.[2] ?? 0);
@@ -41,13 +51,29 @@ export function GlyphWidthEditor({
     && Number.isInteger(verticalOffset) && verticalOffset >= MIN_VERTICAL_OFFSET && verticalOffset <= MAX_VERTICAL_OFFSET
     && Number.isInteger(scale) && scale >= MIN_GLYPH_SCALE && scale <= MAX_GLYPH_SCALE;
   const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset || scale !== savedScale;
-  const previewScale = 45 / Math.max(1, detectedAdvanceWidth(glyph.bboxRaw?.[3] ?? 1));
-  const offsetPreviewPixels = (offset: number) => Math.abs(Number.isFinite(offset) ? offset : 0)
-    * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale;
-  const comparisonPadding = 10 + Math.ceil(Math.max(
-    offsetPreviewPixels(verticalOffset),
-    ...neighbors.map((neighbor) => offsetPreviewPixels(neighbor.verticalOffsetOverride ?? 0)),
-  ));
+  const currentPreview = {
+    ...glyph,
+    charLabel,
+    advanceWidthOverride: Number.isFinite(width) ? width : detected,
+    verticalOffsetOverride: Number.isFinite(verticalOffset) ? verticalOffset : 0,
+    scaleOverride: Number.isFinite(scale) ? scale : 100,
+  };
+  const bounds = glyphPreviewBounds([currentPreview, ...neighbors], previewBounds);
+  const comparisonGlyphs = [0, 1, 2, 3, 4].map((slot) => slot === 2
+    ? currentPreview
+    : neighbors.find((item) => item.comparisonSlot === slot && item.id !== glyph.id) ?? null);
+  function changeWidth(value: number) {
+    setWidth(value);
+    onPreviewChange({ ...currentPreview, advanceWidthOverride: Number.isFinite(value) ? value : detected });
+  }
+  function changeVerticalOffset(value: number) {
+    setVerticalOffset(value);
+    onPreviewChange({ ...currentPreview, verticalOffsetOverride: Number.isFinite(value) ? value : 0 });
+  }
+  function changeScale(value: number) {
+    setScale(value);
+    onPreviewChange({ ...currentPreview, scaleOverride: Number.isFinite(value) ? value : 100 });
+  }
   async function save(nextStatus: Glyph['status']) {
     if (!valid || busy) return;
     setBusy(true);
@@ -93,20 +119,18 @@ export function GlyphWidthEditor({
                 : 'Do sprawdzenia'}
         </span>
       </div>
-      <div className="glyph-preview">
-        {glyph.svgPath && !previewFailed ? (
-          // Generated SVG is served through a contained, sandboxed endpoint and needs no image optimization.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/glyphs/${glyph.id}/preview`}
-            alt={`Zeskanowany glif ${charLabel}`}
-            onError={() => setPreviewFailed(true)}
-            style={{ transform: `scale(${scale / 100})`, transformOrigin: 'top left' }}
-          />
-        ) : (
-          <p className="muted">Podgląd niedostępny. Wgraj skan ponownie.</p>
-        )}
-      </div>
+      {glyph.svgPath && !previewFailed ? (
+        <GlyphLayoutPreview
+          glyphs={[currentPreview]}
+          bounds={bounds}
+          pixelsPerUnit={previewZoom}
+          label={`Pozycja glifu ${charLabel} względem linii bazowej fontu`}
+          onError={() => setPreviewFailed(true)}
+        />
+      ) : (
+        <p className="muted">Podgląd niedostępny. Wgraj skan ponownie.</p>
+      )}
+      <p className="field-hint">Przerywana linia: linia bazowa fontu. Ogonki schodzą poniżej niej.</p>
       <label htmlFor={`width-${glyph.id}`} className="field-label">
         Szerokość znaku i odstępu
       </label>
@@ -119,7 +143,7 @@ export function GlyphWidthEditor({
           max={Math.min(5000, Math.max(1000, detected * 2, width || 0))}
           value={Number.isFinite(width) ? width : 0}
           disabled={busy || !usable}
-          onChange={(event) => setWidth(Number(event.target.value))}
+          onChange={(event) => changeWidth(Number(event.target.value))}
         />
         <input
           className="text-input"
@@ -130,7 +154,7 @@ export function GlyphWidthEditor({
           value={Number.isNaN(width) ? '' : width}
           disabled={busy || !usable}
           onChange={(e) =>
-            setWidth(e.target.value === '' ? NaN : Number(e.target.value))
+            changeWidth(e.target.value === '' ? NaN : Number(e.target.value))
           }
         />
       </div>
@@ -147,7 +171,7 @@ export function GlyphWidthEditor({
           step="1"
           value={Number.isFinite(verticalOffset) ? verticalOffset : 0}
           disabled={busy || !usable}
-          onChange={(event) => setVerticalOffset(Number(event.target.value))}
+          onChange={(event) => changeVerticalOffset(Number(event.target.value))}
         />
         <input
           className="text-input"
@@ -158,7 +182,7 @@ export function GlyphWidthEditor({
           step="1"
           value={Number.isNaN(verticalOffset) ? '' : verticalOffset}
           disabled={busy || !usable}
-          onChange={(e) => setVerticalOffset(e.target.value === '' ? NaN : Number(e.target.value))}
+          onChange={(e) => changeVerticalOffset(e.target.value === '' ? NaN : Number(e.target.value))}
         />
       </div>
       <p className="field-hint">
@@ -177,7 +201,7 @@ export function GlyphWidthEditor({
           step="1"
           value={Number.isFinite(scale) ? scale : MIN_GLYPH_SCALE}
           disabled={busy || !usable}
-          onChange={(event) => setScale(Number(event.target.value))}
+          onChange={(event) => changeScale(Number(event.target.value))}
         />
         <input
           className="text-input"
@@ -188,63 +212,32 @@ export function GlyphWidthEditor({
           step="1"
           value={Number.isNaN(scale) ? '' : scale}
           disabled={busy || !usable}
-          onChange={(e) => setScale(e.target.value === '' ? NaN : Number(e.target.value))}
+          onChange={(e) => changeScale(e.target.value === '' ? NaN : Number(e.target.value))}
         />
       </div>
       {usable && neighbors.length > 0 && (
-        <div className="vertical-compare-strip" style={{ paddingBlock: comparisonPadding }} aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
-          <span className="vertical-compare-line" />
-          {[0, 1, 2, 3, 4].map((slot) => {
-            const current = slot === 2;
-            const neighbor = neighbors.find((item) => item.comparisonSlot === slot && item.id !== glyph.id);
-            if (!current && !neighbor) {
-              return <span className="compare-slot" key={slot} aria-hidden="true" />;
-            }
-            const id = current ? glyph.id : neighbor!.id;
-            const label = current ? charLabel : neighbor!.charLabel;
-            const offset = current ? verticalOffset : (neighbor!.verticalOffsetOverride ?? 0);
-            const size = current ? scale : (neighbor!.scaleOverride ?? 100);
-            return (
-              <span
-                className={`compare-slot${current ? ' current' : ''}`}
-                key={slot}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/glyphs/${id}/preview`}
-                  alt={`${current ? 'Bieżący' : 'Sąsiedni'} glif ${label}`}
-                  style={{
-                    transform: `translateY(${-offset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${size / 100})`,
-                  }}
-                />
-              </span>
-            );
-          })}
-        </div>
+        <>
+          <p className="field-label">Porównanie z sąsiednimi znakami</p>
+          <GlyphLayoutPreview
+            glyphs={comparisonGlyphs}
+            bounds={bounds}
+            pixelsPerUnit={previewZoom}
+            comparison
+            currentId={glyph.id}
+            label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami przy wspólnej linii bazowej`}
+          />
+        </>
       )}
       {usable && valid && (
-        <div
-          className="spacing-preview"
-          style={{ paddingBlock: 10 + Math.ceil(offsetPreviewPixels(verticalOffset)) }}
-          aria-label={`Podgląd odstępu dla glifu ${charLabel}`}
-        >
-          {[0, 1, 2].map((index) => (
-            <span key={index} style={{ width: width * previewScale }}>
-              {/* The preview repeats the actual cropped glyph at the selected advance width. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/glyphs/${glyph.id}/preview`}
-                alt=""
-                style={{
-                  width: detected * previewScale,
-                  maxWidth: 'none',
-                  transform: `translateY(${-verticalOffset * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale}px) scale(${scale / 100})`,
-                  transformOrigin: 'top left',
-                }}
-              />
-            </span>
-          ))}
-        </div>
+        <>
+          <p className="field-label">Odstępy w tekście</p>
+          <GlyphLayoutPreview
+            glyphs={[currentPreview, currentPreview, currentPreview]}
+            bounds={bounds}
+            pixelsPerUnit={previewZoom}
+            label={`Podgląd odstępu dla glifu ${charLabel}`}
+          />
+        </>
       )}
       <p className="field-hint">
         Jednostki fontu · wykryto {detected} · zapis po zatwierdzeniu

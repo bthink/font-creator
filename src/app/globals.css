@@ -1338,7 +1338,7 @@ select {
 }
 .review-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 18px;
 }
 .glyph-card {
@@ -1460,9 +1460,6 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .project-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .review-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .download-template {
@@ -1761,60 +1758,50 @@ select {
   font-size: 12px;
   padding: 12px;
 }
-.spacing-preview {
-  display: flex;
-  align-items: flex-end;
-  min-height: 75px;
-  overflow-x: auto;
-  padding: 10px 5px;
-  margin-top: 14px;
-  background: #f7f9f2;
-  border-bottom: 1px solid #c7d5bb;
-}
-.spacing-preview > span {
-  display: block;
-  flex-shrink: 0;
-  min-height: 45px;
-  border-right: 1px dashed #abbf99;
-}
-.spacing-preview img {
-  height: 45px;
-  object-fit: fill;
-}
-.vertical-compare-strip {
+.glyph-layout-preview {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: center;
-  gap: 6px;
-  min-height: 80px;
   overflow-x: auto;
-  padding: 10px 5px;
-  margin-top: 14px;
+  margin-top: 8px;
   background: #f7f9f2;
   border: 1px solid #c7d5bb;
+  border-radius: 4px;
 }
-.vertical-compare-line {
+.glyph-layout-preview svg {
+  display: block;
+  max-width: none;
+}
+.glyph-layout-baseline-rule,
+.glyph-layout-ascender-rule {
   position: absolute;
   left: 0;
   right: 0;
-  top: 50%;
-  border-top: 1px dashed #abbf99;
+  border-top: 1px dashed #718d5b;
   pointer-events: none;
 }
-.compare-slot {
-  display: block;
-  min-width: 0;
-  height: 60px;
+.glyph-layout-ascender-rule {
+  border-top: 1px solid #c7d5bb;
 }
-.compare-slot img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.preview-zoom-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  font-size: 12px;
 }
-.compare-slot.current img {
-  outline: 2px solid var(--green, #4a7c3f);
-  outline-offset: 2px;
+.preview-zoom-control select {
+  width: auto;
+}
+.glyph-layout-guide {
+  stroke: #c7d5bb;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.glyph-layout-selection {
+  fill: #315c4810;
+  stroke: var(--green);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 .workflow-tabs { scroll-margin-top: 16px; }
 @media (max-width: 680px) { .workflow-tabs { scroll-margin-top: 82px; } }
