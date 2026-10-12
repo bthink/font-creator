@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { Glyph } from '@/lib/db/glyphs';
 import { requestJson, errorMessage } from '@/lib/client';
-import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI, MIN_GLYPH_SCALE, MAX_GLYPH_SCALE } from '@/lib/glyphMetrics';
+import { detectedAdvanceWidth, FONT_UNITS_PER_EM, SCAN_DPI, MIN_GLYPH_SCALE, MAX_GLYPH_SCALE, MIN_VERTICAL_OFFSET, MAX_VERTICAL_OFFSET } from '@/lib/glyphMetrics';
 import { Icon } from './Icon';
 
 export type GlyphNeighbor = {
@@ -38,10 +38,16 @@ export function GlyphWidthEditor({
   const [error, setError] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const valid = Number.isInteger(width) && width >= 0 && width <= 5000
-    && Number.isInteger(verticalOffset) && verticalOffset >= -150 && verticalOffset <= 150
+    && Number.isInteger(verticalOffset) && verticalOffset >= MIN_VERTICAL_OFFSET && verticalOffset <= MAX_VERTICAL_OFFSET
     && Number.isInteger(scale) && scale >= MIN_GLYPH_SCALE && scale <= MAX_GLYPH_SCALE;
   const dirty = width !== savedWidth || verticalOffset !== savedVerticalOffset || scale !== savedScale;
   const previewScale = 45 / Math.max(1, detectedAdvanceWidth(glyph.bboxRaw?.[3] ?? 1));
+  const offsetPreviewPixels = (offset: number) => Math.abs(Number.isFinite(offset) ? offset : 0)
+    * (SCAN_DPI / FONT_UNITS_PER_EM) * previewScale;
+  const comparisonPadding = 10 + Math.ceil(Math.max(
+    offsetPreviewPixels(verticalOffset),
+    ...neighbors.map((neighbor) => offsetPreviewPixels(neighbor.verticalOffsetOverride ?? 0)),
+  ));
   async function save(nextStatus: Glyph['status']) {
     if (!valid || busy) return;
     setBusy(true);
@@ -136,9 +142,10 @@ export function GlyphWidthEditor({
           id={`voffset-${glyph.id}`}
           aria-label={`Pozycja w pionie glifu ${charLabel}`}
           type="range"
-          min="-150"
-          max="150"
-          value={verticalOffset}
+          min={MIN_VERTICAL_OFFSET}
+          max={MAX_VERTICAL_OFFSET}
+          step="1"
+          value={Number.isFinite(verticalOffset) ? verticalOffset : 0}
           disabled={busy || !usable}
           onChange={(event) => setVerticalOffset(Number(event.target.value))}
         />
@@ -146,13 +153,17 @@ export function GlyphWidthEditor({
           className="text-input"
           aria-label={`Dokładna pozycja w pionie glifu ${charLabel}`}
           type="number"
-          min="-150"
-          max="150"
-          value={verticalOffset}
+          min={MIN_VERTICAL_OFFSET}
+          max={MAX_VERTICAL_OFFSET}
+          step="1"
+          value={Number.isNaN(verticalOffset) ? '' : verticalOffset}
           disabled={busy || !usable}
-          onChange={(e) => setVerticalOffset(Number(e.target.value))}
+          onChange={(e) => setVerticalOffset(e.target.value === '' ? NaN : Number(e.target.value))}
         />
       </div>
+      <p className="field-hint">
+        Ujemne wartości przesuwają znak w dół, dodatnie w górę. Zakres: {MIN_VERTICAL_OFFSET} do {MAX_VERTICAL_OFFSET}.
+      </p>
       <label htmlFor={`scale-${glyph.id}`} className="field-label">
         Rozmiar (%)
       </label>
@@ -181,7 +192,7 @@ export function GlyphWidthEditor({
         />
       </div>
       {usable && neighbors.length > 0 && (
-        <div className="vertical-compare-strip" aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
+        <div className="vertical-compare-strip" style={{ paddingBlock: comparisonPadding }} aria-label={`Porównanie pozycji glifu ${charLabel} z sąsiednimi znakami`}>
           <span className="vertical-compare-line" />
           {[0, 1, 2, 3, 4].map((slot) => {
             const current = slot === 2;
@@ -214,6 +225,7 @@ export function GlyphWidthEditor({
       {usable && valid && (
         <div
           className="spacing-preview"
+          style={{ paddingBlock: 10 + Math.ceil(offsetPreviewPixels(verticalOffset)) }}
           aria-label={`Podgląd odstępu dla glifu ${charLabel}`}
         >
           {[0, 1, 2].map((index) => (

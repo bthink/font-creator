@@ -38,24 +38,24 @@ describe('glyph PATCH route', () => {
     });
   }
 
-  it('saves a valid vertical offset override', async () => {
+  it.each([-1000, -500, -60, 0, 500, 1000])('saves a valid vertical offset override of %i', async (offset) => {
     const glyph = await setup();
     const { PATCH } = await import('./route');
 
-    const response = await PATCH(patchRequest({ advanceWidthOverride: 500, verticalOffsetOverride: -60, status: 'approved' }), {
+    const response = await PATCH(patchRequest({ advanceWidthOverride: 500, verticalOffsetOverride: offset, status: 'approved' }), {
       params: Promise.resolve({ glyphId: String(glyph.id) }),
     });
 
     expect(response.status).toBe(200);
     const { getGlyph } = await import('@/lib/db/glyphs');
-    expect(getGlyph(glyph.id)?.verticalOffsetOverride).toBe(-60);
+    expect(getGlyph(glyph.id)?.verticalOffsetOverride).toBe(offset);
   });
 
-  it('rejects a vertical offset outside -150..150', async () => {
+  it.each([-1001, 1001])('rejects a vertical offset outside -1000..1000: %i', async (offset) => {
     const glyph = await setup();
     const { PATCH } = await import('./route');
 
-    const response = await PATCH(patchRequest({ verticalOffsetOverride: 151 }), {
+    const response = await PATCH(patchRequest({ verticalOffsetOverride: offset }), {
       params: Promise.resolve({ glyphId: String(glyph.id) }),
     });
 
