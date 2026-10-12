@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateGlyphOverrides } from '@/lib/db/glyphs';
-import { MIN_GLYPH_SCALE, MAX_GLYPH_SCALE } from '@/lib/glyphMetrics';
+import { MIN_GLYPH_SCALE, MAX_GLYPH_SCALE, MIN_VERTICAL_OFFSET, MAX_VERTICAL_OFFSET } from '@/lib/glyphMetrics';
 
 export async function PATCH(
   request: NextRequest,
@@ -28,11 +28,11 @@ export async function PATCH(
   if (
     body.verticalOffsetOverride !== undefined &&
     (!Number.isInteger(body.verticalOffsetOverride) ||
-      body.verticalOffsetOverride < -150 ||
-      body.verticalOffsetOverride > 150)
+      body.verticalOffsetOverride < MIN_VERTICAL_OFFSET ||
+      body.verticalOffsetOverride > MAX_VERTICAL_OFFSET)
   )
     return NextResponse.json(
-      { error: 'Pozycja w pionie musi być liczbą całkowitą od -150 do 150.' },
+      { error: `Pozycja w pionie musi być liczbą całkowitą od ${MIN_VERTICAL_OFFSET} do ${MAX_VERTICAL_OFFSET}.` },
       { status: 400 },
     );
   if (
