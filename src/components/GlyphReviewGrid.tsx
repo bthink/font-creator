@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { GlyphWithChar } from '@/lib/db/glyphs';
 import { GlyphWidthEditor, type GlyphNeighbor } from './GlyphWidthEditor';
 import { errorMessage, requestJson } from '@/lib/client';
+import { glyphPreviewBounds, PREVIEW_PIXELS_PER_UNIT, type PreviewGlyph } from '@/lib/glyphPreview';
 
 function neighborsFor(items: GlyphWithChar[], index: number): GlyphNeighbor[] {
   const candidates = [-2, -1, 1, 2]
@@ -19,6 +20,8 @@ function neighborsFor(items: GlyphWithChar[], index: number): GlyphNeighbor[] {
       status: item.status,
       verticalOffsetOverride: item.verticalOffsetOverride,
       scaleOverride: item.scaleOverride,
+      bboxRaw: item.bboxRaw,
+      advanceWidthOverride: item.advanceWidthOverride,
     }));
 }
 
@@ -32,9 +35,13 @@ export function GlyphReviewGrid({
   const router = useRouter();
   const [items, setItems] = useState(glyphs);
   const [filter, setFilter] = useState('all');
+  const [previewZoom, setPreviewZoom] = useState(PREVIEW_PIXELS_PER_UNIT);
+  const [previewDrafts, setPreviewDrafts] = useState<Record<number, PreviewGlyph>>({});
   const [approvingAll, setApprovingAll] = useState(false);
   const [error, setError] = useState('');
   const approved = items.filter((g) => g.status === 'approved').length;
+  const previewItems = items.map((glyph) => ({ ...glyph, ...previewDrafts[glyph.id] }));
+  const previewBounds = glyphPreviewBounds(previewItems.filter((g) => g.svgPath && g.status !== 'failed'));
   const visible = items.filter(
     (g) =>
       filter === 'all' ||
@@ -91,6 +98,16 @@ export function GlyphReviewGrid({
           {approvingAll ? 'Zatwierdzanie...' : 'Zatwierdź wszystkie'}
         </button>
       </div>
+      <label className="preview-zoom-control">
+        Powiększenie podglądów
+        <select className="text-input" value={previewZoom} onChange={(event) => setPreviewZoom(Number(event.target.value))}>
+          <option value={0.1}>100%</option>
+          <option value={0.15}>150%</option>
+          <option value={0.2}>200%</option>
+          <option value={0.3}>300%</option>
+        </select>
+        <span className="field-hint">Wspólna skala dla wszystkich znaków.</span>
+      </label>
       {error && <p className="notice error" role="alert">{error}</p>}
       {visible.length ? (
         <div className="review-grid">
@@ -99,8 +116,14 @@ export function GlyphReviewGrid({
               key={`${glyph.id}-${glyph.status}`}
               glyph={glyph}
               charLabel={glyph.charLabel}
-              neighbors={neighborsFor(items, items.findIndex((item) => item.id === glyph.id))}
+              previewBounds={previewBounds}
+              previewZoom={previewZoom}
+              neighbors={neighborsFor(previewItems, items.findIndex((item) => item.id === glyph.id))}
+              onPreviewChange={(preview) => setPreviewDrafts((current) => ({ ...current, [glyph.id]: preview }))}
               onSaved={(status, width, verticalOffset, scale) => {
+                setPreviewDrafts((current) => Object.fromEntries(
+                  Object.entries(current).filter(([id]) => Number(id) !== glyph.id),
+                ));
                 setItems((current) =>
                   current.map((g) =>
                     g.id === glyph.id

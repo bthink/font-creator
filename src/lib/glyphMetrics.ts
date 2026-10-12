@@ -1,5 +1,7 @@
 // Font builder uses 1000 units per em; templates are scanned at 300 DPI.
 export const FONT_UNITS_PER_EM = 1000;
+export const FONT_ASCENDER = 800;
+export const FONT_DESCENDER = -200;
 export const SCAN_DPI = 300;
 export const MIN_VERTICAL_OFFSET = -1000;
 export const MAX_VERTICAL_OFFSET = 1000;
